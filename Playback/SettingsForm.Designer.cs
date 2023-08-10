@@ -59,6 +59,7 @@
             this.lblLatency = new System.Windows.Forms.Label();
             this.lblUpdateRate = new System.Windows.Forms.Label();
             this.numUpdateRate = new System.Windows.Forms.NumericUpDown();
+            this.chkShowStartAt = new System.Windows.Forms.CheckBox();
             ((System.ComponentModel.ISupportInitialize)(this.numLatency)).BeginInit();
             ((System.ComponentModel.ISupportInitialize)(this.numUpdateRate)).BeginInit();
             this.SuspendLayout();
@@ -344,6 +345,16 @@
             0,
             0});
             // 
+            // chkShowStartAt
+            // 
+            this.chkShowStartAt.AutoSize = true;
+            this.chkShowStartAt.Location = new System.Drawing.Point(149, 72);
+            this.chkShowStartAt.Name = "chkShowStartAt";
+            this.chkShowStartAt.Size = new System.Drawing.Size(111, 17);
+            this.chkShowStartAt.TabIndex = 28;
+            this.chkShowStartAt.Text = "Show Start At box";
+            this.chkShowStartAt.UseVisualStyleBackColor = true;
+            // 
             // SettingsForm
             // 
             this.AcceptButton = this.btnOK;
@@ -351,6 +362,7 @@
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
             this.CancelButton = this.btnCancel;
             this.ClientSize = new System.Drawing.Size(434, 337);
+            this.Controls.Add(this.chkShowStartAt);
             this.Controls.Add(this.lblUpdateRate);
             this.Controls.Add(this.numUpdateRate);
             this.Controls.Add(this.lblLatency);
@@ -422,5 +434,6 @@
         private System.Windows.Forms.Label lblLatency;
         private System.Windows.Forms.Label lblUpdateRate;
         private System.Windows.Forms.NumericUpDown numUpdateRate;
+        private System.Windows.Forms.CheckBox chkShowStartAt;
     }
 }

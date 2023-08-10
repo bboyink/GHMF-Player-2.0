@@ -59,6 +59,8 @@ namespace Playback
         public string PLCIPAddress;
         public string PLCPort;
 
+        public bool ShowStartAt;
+
         public int PlaybackLatency;
         public int UpdateRate;
 
@@ -87,6 +89,8 @@ namespace Playback
 
             PLCIPAddress = "192.168.1.10";
             PLCPort = "444";
+
+            ShowStartAt = false;
 
             PlaybackLatency = 50;
             UpdateRate = 30;

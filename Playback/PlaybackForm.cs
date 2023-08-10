@@ -199,6 +199,7 @@ namespace Playback
 
             playlistFolderBrowser.SelectedPath = Settings.CurrentSettings.PlaylistDirectory;
             songFolderBrowser.SelectedPath = Settings.CurrentSettings.SongDirectory;
+            lblStartPoint.Visible = txtStartPoint.Visible = Settings.CurrentSettings.ShowStartAt;
 
             tlpLists.RowStyles[1].Height = 0;
 
@@ -1960,6 +1961,8 @@ namespace Playback
                         PLCController.Disconnect();
                     plcDisabled = settingsForm.PLC_Disabled;
                     dmxDisabled = settingsForm.DMX_Disabled;
+
+                    lblStartPoint.Visible = txtStartPoint.Visible = Settings.CurrentSettings.ShowStartAt;
 
                     SaveState(false);
                     SetPlaybackEnable(false);

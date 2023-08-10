@@ -28,6 +28,8 @@ namespace Playback
             txtPLCIP.Text = Settings.CurrentSettings.PLCIPAddress;
             txtPLCPort.Text = Settings.CurrentSettings.PLCPort;
 
+            chkShowStartAt.Checked = Settings.CurrentSettings.ShowStartAt;
+
             // Load the files and folders
             txtLightFCWMap.Text = Settings.CurrentSettings.FCWMap;
             txtLightDMXMap.Text = Settings.CurrentSettings.DMXMap;
@@ -57,12 +59,12 @@ namespace Playback
             Settings.CurrentSettings.UpdateRate = (int)numUpdateRate.Value;
 
             // Save the PLC comms settings
-            System.Net.IPAddress testIP;
-            if (!string.IsNullOrWhiteSpace(txtPLCIP.Text) && System.Net.IPAddress.TryParse(txtPLCIP.Text, out testIP))
+            if (!string.IsNullOrWhiteSpace(txtPLCIP.Text) && System.Net.IPAddress.TryParse(txtPLCIP.Text, out _))
                 Settings.CurrentSettings.PLCIPAddress = txtPLCIP.Text;
-            int testPort;
-            if (!string.IsNullOrWhiteSpace(txtPLCPort.Text) && int.TryParse(txtPLCPort.Text, out testPort))
+            if (!string.IsNullOrWhiteSpace(txtPLCPort.Text) && int.TryParse(txtPLCPort.Text, out _))
                 Settings.CurrentSettings.PLCPort = txtPLCPort.Text;
+
+            Settings.CurrentSettings.ShowStartAt = chkShowStartAt.Checked;
 
             // Save the files and folders
             if (System.IO.File.Exists(txtLightFCWMap.Text))
