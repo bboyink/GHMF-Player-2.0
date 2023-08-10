@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Drawing;
 using System.IO;
 using System.Linq;
 using System.Windows.Forms;
@@ -9,21 +10,12 @@ namespace Playback
     {
         public const int RefreshRate = 10;
 
-        // These probably don't need to be class-level, but this is a late addition to the project
-        // so I'm going with the first thing that comes to mind. Probably bad practice
-        private int totalFCWCount = 0;
-        private int lightFCWCount = 0;
-        private int waterFCWCount = 0;
-        private int totalFCWsExecuted = 0;
-        private int lightFCWsExecuted = 0;
-        private int waterFCWsSent = 0;
         private bool skipResetAfterSong = false;
 
         private Player SoundController;
         private Lighting LightController;
         private PLCComms PLCController;
         private InitStatus InitStatus;
-        private Monitor Monitor;
 
         private FCW[] FCWs;
         private LEDColor[] Colors;
@@ -208,18 +200,6 @@ namespace Playback
             playlistFolderBrowser.SelectedPath = Settings.CurrentSettings.PlaylistDirectory;
             songFolderBrowser.SelectedPath = Settings.CurrentSettings.SongDirectory;
 
-            Monitor = new Monitor
-            {
-                Location = Settings.CurrentSettings.MonitorPosition,
-                Size = Settings.CurrentSettings.MonitorSize
-            };
-            // Make sure they can't get it stuck offscreen
-            if (!IsOnScreen(Monitor))
-                Monitor.StartPosition = FormStartPosition.WindowsDefaultLocation;
-            // We can't Invoke on the monitor until either we've shown it or we've created a handle
-            // This is a convenient way to create the handle
-            IntPtr dummy = Monitor.Handle;
-
             tlpLists.RowStyles[1].Height = 0;
 
             if (System.Diagnostics.Debugger.IsAttached)
@@ -342,8 +322,6 @@ namespace Playback
                     colorParser.Parse(colorMapFile);
 
                 Colors = colorParser.Colors;
-
-                Monitor.SetColors(Colors);
 
                 ColorsLoaded = true;
             }
@@ -652,8 +630,6 @@ namespace Playback
                 LightController.ConnectDMX();
                 ResetLights();
 
-                Monitor.Initialize(LightController.LightGroups, LightController.LightNames);
-
                 LightsInitd = LightController.DMXConnected;
             }
             catch (Exception e)
@@ -723,11 +699,6 @@ namespace Playback
             {
                 Settings.CurrentSettings.PlaybackPosition = Location;
                 Settings.CurrentSettings.PlaybackSize = Size;
-                if (Monitor != null)
-                {
-                    Settings.CurrentSettings.MonitorPosition = Monitor.Location;
-                    Settings.CurrentSettings.MonitorSize = Monitor.Size;
-                }
             }
 
             Settings.SerializeSettings();
@@ -758,9 +729,7 @@ namespace Playback
                 LightController.ReconnectDMX();
             }
 
-            // If we did everything but connect, then it's go time
-            if (Monitor.Ready && connected)
-                LightsInitd = true;
+            LightsInitd = connected;
         }
 
         #endregion
@@ -1042,7 +1011,7 @@ namespace Playback
 
         private void lvAnnouncements_SelectedIndexChanged(object sender, EventArgs e)
         {
-            btnAnnounce.Enabled = lvAnnouncements.SelectedItems.Count > 0 && SoundController.PlaybackState == Player.PlayState.Stopped;
+            btnAnnounce.Enabled = lvAnnouncements.SelectedItems.Count > 0 && SoundController?.PlaybackState == Player.PlayState.Stopped;
 
             lvAnnouncements.Items.Cast<ListViewItem>()
                 .ToList().ForEach(item =>
@@ -1186,12 +1155,7 @@ namespace Playback
 
             Logger.LogInfo("Stopping playback");
 
-            if (Monitor != null && Monitor.Ready)
-            {
-                if (LightController != null)
-                    Monitor.UpdateLights(LightController.LightColors);
-                Monitor.UpdateMotion("None");
-            }
+            ForcePaint();
 
             SetOutput(0);
 
@@ -1228,17 +1192,9 @@ namespace Playback
         {
             try
             {
-                waterFCWsSent = waterFCWCount = 0;
-                lightFCWsExecuted = lightFCWCount = 0;
-                totalFCWsExecuted = totalFCWCount = 0;
-
                 // New as of 6/1/2015: They want a 3-second "leader" to allow them a moment to see that the PLC is fully operational before the show begins
                 // Also, I'm told sometimes we miss the first 3 FCWs of a show, so this ensures those are dummy FCWs
                 PlayLeader(3000, 5);
-
-                waterFCWsSent = 0;
-                lightFCWsExecuted = 0;
-                totalFCWsExecuted = 0;
 
                 TimeSpan totalInShow = Player.GetTime(true, playlist.Songs);
 
@@ -1312,9 +1268,6 @@ namespace Playback
         {
             int cyclesPerRefresh = 5;
             int refreshNum = 0;
-            totalFCWCount += CountCommands(out int tempWaterFCWCount, out int tempLightFCWCount, commandFile);
-            waterFCWCount += tempWaterFCWCount;
-            lightFCWCount += tempLightFCWCount;
 
             CommandLine currentLine;
             TimeSpan timeInSong = TimeSpan.Zero;
@@ -1376,11 +1329,7 @@ namespace Playback
                         // Refresh every X cycles to prevent flooding the UI with updates
                         if (refreshNum++ % cyclesPerRefresh == 0 || timeTilNextCommand == 0 || stopping)
                         {
-                            if (Monitor != null && Monitor.Ready)
-                            {
-                                Monitor.UpdateLights(LightController.LightColors);
-                                Monitor.UpdateMotion(LightController.CurrentMotion);
-                            }
+                            ForcePaint();
                             UpdateTimeUI(showName, song, timeInSong, totalInSong, timeInShow.Add(timeInSong), totalInShow);
                             if (refreshWatch.ElapsedMilliseconds > Settings.CurrentSettings.RefreshWarnMS)
                                 Logger.LogWarning("Refresh took {0}ms", refreshWatch.ElapsedMilliseconds);
@@ -1410,35 +1359,6 @@ namespace Playback
 
         #region Commands
 
-        private int CountCommands(out int waterCommands, out int lightCommands, params CommandFile[] commandFiles)
-        {
-            int totalCommands = 0;
-            waterCommands = 0;
-            lightCommands = 0;
-
-            foreach (CommandFile commandFile in commandFiles)
-            {
-                foreach (CommandLine line in commandFile.Commands)
-                {
-                    foreach (Command command in line.Commands)
-                    {
-                        FCW fcw = FCWs[command.Address];
-                        if (fcw == null) continue;
-
-                        if ((fcw.Type & FCWType.Water) != FCWType.None)
-                            waterCommands++;
-
-                        if ((fcw.Type & FCWType.Light) != FCWType.None)
-                            lightCommands++;
-
-                        totalCommands++;
-                    }
-                }
-            }
-
-            return totalCommands;
-        }
-
         private void ExecuteCommands(params Command[] commands)
         {
             // If we haven't finished loading in our FCWs this is going to be all sorts of problems
@@ -1449,8 +1369,6 @@ namespace Playback
             string joinedCommands = string.Join(" ", (object[])commands);
             Logger.LogDebug("Executing commands {0}", joinedCommands);
 
-            System.Collections.Generic.List<string> waterFCWs = new System.Collections.Generic.List<string>();
-            System.Collections.Generic.List<string> lightFCWs = new System.Collections.Generic.List<string>();
             for (int i = 0; i < commands.Length; i++)
             {
                 Command command = commands[i];
@@ -1501,16 +1419,10 @@ namespace Playback
 
                     if ((fcwToExecute.Type & FCWType.Water) != FCWType.None)
                     {
-                        waterFCWs.Add(command.ToString());
-                        // If it's just a water command, this is our only place to increment
-                        if (fcwToExecute.Type == FCWType.Water)
-                            totalFCWsExecuted++;
                         PLCController.AddToQueue(command.ToString());
                     }
                     if ((fcwToExecute.Type & FCWType.Light) != FCWType.None)
                     {
-                        lightFCWs.Add(command.ToString());
-
                         LEDColor newColor = GetColor(command, out double intensity, out bool lockedColor);
 
                         // Special case: if this is a fade command, we need the following command to tell us where we're fading to
@@ -1529,8 +1441,6 @@ namespace Playback
                                 continue;
                             }
                             newColor = GetColor(commands[i + 1], out intensity, out lockedColor);
-                            lightFCWsExecuted++;
-                            totalFCWsExecuted++;
                             i++; // Skip the next command (since it's just a color setter)
                         }
 
@@ -1568,15 +1478,10 @@ namespace Playback
                                     LightController.UnlockLight(light);
                             }
                         }
-                        lightFCWsExecuted++;
-                        totalFCWsExecuted++;
                     }
                     if ((fcwToExecute.Type & FCWType.Special) != FCWType.None)
                     {
                         ExecuteSpecialCommand(command);
-
-                        if (fcwToExecute.Type == FCWType.Special)
-                            totalFCWsExecuted++;
                     }
                 }
                 catch (Exception e)
@@ -1590,17 +1495,12 @@ namespace Playback
 
             try
             {
-                waterFCWsSent += PLCController.SendQueue();
+                PLCController.SendQueue();
             }
             catch (Exception e)
             {
                 ShowMessage("An error occurred sending to the PLC: " + Environment.NewLine + e.Message + Environment.NewLine + "Attempting to reconnect...");
                 Logger.LogError(e.ToString());
-            }
-
-            if (Monitor != null && Monitor.Ready)
-            {
-                Monitor.UpdateFCWs(string.Join(" ", waterFCWs), string.Join(" ", lightFCWs), waterFCWsSent, waterFCWCount, lightFCWsExecuted, lightFCWCount, totalFCWsExecuted, totalFCWCount);
             }
         }
 
@@ -1693,6 +1593,8 @@ namespace Playback
                         LightController.EndShift();
                     else
                     {
+                        // The FCL requires a bit for right, left, shift, and rotate
+                        // but...if we're not shifting right we must be shifting left, and if we're not rotating we must be shifting only
                         bool right = (command.Data & 1) > 0;
                         //bool left = (command.Data & 2) > 0;
                         //bool shiftOnly = (command.Data & 16) > 0;
@@ -1724,13 +1626,18 @@ namespace Playback
         {
             try
             {
+                if (txtManualFCW.Text == secretWord)
+                {
+                    DoEasterEgg();
+                    return;
+                }
+
                 // Make it into a fake command line to maximize code reuse (so we can do a whole batch of commands)
                 CommandLine manualCommands = new CommandLine("00:00.0" + txtManualFCW.Text);
                 try
                 {
                     ExecuteCommands(manualCommands.Commands);
-                    if (Monitor != null && Monitor.Ready)
-                        Monitor.UpdateLights(LightController.LightColors);
+                    ForcePaint();
 
                     txtManualFCW.Text = "";
                 }
@@ -1770,9 +1677,7 @@ namespace Playback
                 return;
             }
 
-            // The monitor isn't on the same page as the rest of these, but it does need light initialized before it can open up
-            btnStartStop.Enabled = barVolLeftChannel.Enabled = btnMonitor.Enabled = txtManualFCW.Enabled = btnExecuteManualFCW.Enabled = enable;
-            if (enable && Monitor.Ready && !Monitor.Visible) Monitor.Show();
+            btnStartStop.Enabled = barVolLeftChannel.Enabled = txtManualFCW.Enabled = btnExecuteManualFCW.Enabled = enable;
             if (!enable) btnPauseResume.Enabled = enable;
             if (announcementInProgress)
             {
@@ -1927,6 +1832,36 @@ namespace Playback
             volMeter.Amplitude = output;
         }
 
+        private void ForcePaint()
+        {
+            if (InvokeRequired)
+            {
+                try
+                {
+                    Invoke(new System.Action(() => ForcePaint()));
+                }
+                catch (System.ObjectDisposedException) { } // We're shutting down, it doesn't matter
+                return;
+            }
+
+            foreach (Panel light in pnlFountain.Controls.OfType<Panel>())
+            {
+                LEDColor color = LightController?.GetLightColor(int.Parse(light.Tag.ToString()));
+                Color newColor = Color.FromArgb(color?.R ?? 0, color?.G ?? 0, color?.B ?? 0);
+                if (light.ForeColor != newColor)
+                {
+                    light.ForeColor = newColor;
+                    light.Refresh();
+                }
+            }
+        }
+
+        private void light_Paint(object sender, PaintEventArgs e)
+        {
+            Control source = (Control)sender;
+            e.Graphics.FillEllipse(new SolidBrush(source.ForeColor), 0, 0, source.Width - 1, source.Height - 1);
+        }
+
         #endregion
 
         #region Form Events
@@ -1939,7 +1874,6 @@ namespace Playback
 
         private void btnBrowseSong_Click(object sender, EventArgs e)
         {
-
             if (songFolderBrowser.ShowDialog(this) == DialogResult.OK)
                 LoadListView(lvSongs, lblCurrentSongFolder, songFolderBrowser.SelectedPath, "*.wav");
         }
@@ -1952,7 +1886,10 @@ namespace Playback
                     StartPlayback();
                     break;
                 default: // If we're playing or paused, we want to full-stop
-                    StopPlayback();
+                    if (MessageBox.Show("Are you sure you wish to stop the show?", "Stop Show?", MessageBoxButtons.YesNo, MessageBoxIcon.Question) == DialogResult.Yes)
+                    {
+                        StopPlayback();
+                    }
                     break;
             }
         }
@@ -1991,7 +1928,7 @@ namespace Playback
             if (!LoggedIn)
             {
                 string password = "APEX8422"; // Default
-                string passwordFile = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonDocuments), "GHMFP.pas");
+                string passwordFile = Path.Combine(@"C:\", "GHMF", "Config", "GHMFP.pas");
                 if (File.Exists(passwordFile))
                 {
                     using (StreamReader pwStream = File.OpenText(passwordFile))
@@ -2040,12 +1977,6 @@ namespace Playback
                 else
                     LightController.ConnectDMX();
             }
-        }
-
-        private void btnMonitor_Click(object sender, EventArgs e)
-        {
-            if (!Monitor.Visible)
-                Monitor.Show(this);
         }
 
         private void PlaybackForm_Resize(object sender, EventArgs e)
@@ -2111,8 +2042,9 @@ namespace Playback
 
         #region Shh
 
+        private const string secretWord = "iridescent";
         // Not what you'd call creative, but it's a classic
-        private Keys[] easterEgg = { Keys.Up, Keys.Up, Keys.Down, Keys.Down, Keys.Left, Keys.Right, Keys.Left, Keys.Right, Keys.B, Keys.A, Keys.Enter };
+        private readonly Keys[] easterEgg = { Keys.Up, Keys.Up, Keys.Down, Keys.Down, Keys.Left, Keys.Right, Keys.Left, Keys.Right, Keys.B, Keys.A, Keys.Enter };
         private int easterEggIndex = 0;
         protected override bool ProcessCmdKey(ref Message msg, Keys keyData)
         {
@@ -2129,7 +2061,7 @@ namespace Playback
                 easterEggIndex = 0;
             if (easterEggIndex == easterEgg.Length)
             {
-                new System.Threading.Thread(() => DoEasterEgg()) { IsBackground = true }.Start();
+                DoEasterEgg();
                 easterEggIndex = 0;
             }
 
@@ -2138,12 +2070,17 @@ namespace Playback
 
         private void DoEasterEgg()
         {
+            new System.Threading.Thread(() => DoEasterEggThread()) { IsBackground = true }.Start();
+        }
+
+        private void DoEasterEggThread()
+        {
             if (LightsInitd && SoundInitd && SoundController.PlaybackState == Player.PlayState.Stopped)
             {
                 ExecuteCommands(new Command(99, 0), new Command(48, 48));
                 System.Collections.Generic.List<System.Threading.Thread> threads = new System.Collections.Generic.List<System.Threading.Thread>();
                 // Loop through all the individual lights and rainbow them (500 is the start of our individual-light addresses)
-                foreach (FCW fcw in FCWs.Where(f => f != null && f.Address > 500 && f.Role == FCWLightRole.TurnOnOff && f.AffectedLights.Length == 1))
+                foreach (FCW fcw in FCWs.Where(f => f != null && f.Address > 500 && f.Role == FCWLightRole.TurnOnOff && f.AffectedLights.Length == 1).OrderBy(f => f.AffectedLights.First()))
                 {
                     System.Threading.Thread thread = new System.Threading.Thread(() => DoLightEasterEgg(fcw.Address)) { IsBackground = true };
                     threads.Add(thread);
@@ -2151,10 +2088,10 @@ namespace Playback
                     System.Threading.Thread.Sleep(50);
                 }
                 foreach (System.Threading.Thread thread in threads)
-                    thread.Join(2000);
+                    thread.Join(5000);
 
                 ExecuteCommands(new Command(99, 0));
-                Monitor.UpdateLights(LightController.LightColors);
+                ForcePaint();
             }
         }
 
@@ -2167,7 +2104,7 @@ namespace Playback
                     break;
 
                 ExecuteCommands(new Command(fcw, color));
-                Monitor.UpdateLights(LightController.LightColors);
+                ForcePaint();
                 System.Threading.Thread.Sleep(50);
             }
             ExecuteCommands(new Command(fcw, 0));

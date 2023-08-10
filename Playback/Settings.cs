@@ -5,7 +5,7 @@ namespace Playback
 {
     public static class Settings
     {
-        private static string fileLocation = Path.Combine(System.Environment.GetFolderPath(System.Environment.SpecialFolder.CommonDocuments), "PlaybackSettings.xml");
+        private static readonly string fileLocation = Path.Combine(System.Environment.GetFolderPath(System.Environment.SpecialFolder.CommonDocuments), "PlaybackSettings.xml");
 
         public static SettingsHolder CurrentSettings;
 
@@ -66,8 +66,6 @@ namespace Playback
 
         public System.Drawing.Point PlaybackPosition;
         public System.Drawing.Size PlaybackSize;
-        public System.Drawing.Point MonitorPosition;
-        public System.Drawing.Size MonitorSize;
 
         public int CurrentPlaylistSongColumnWidth;
         public int CurrentPlaylistArtistColumnWidth;
@@ -97,8 +95,6 @@ namespace Playback
 
             PlaybackPosition = new System.Drawing.Point();
             PlaybackSize = new System.Drawing.Size();
-            MonitorPosition = new System.Drawing.Point();
-            MonitorSize = new System.Drawing.Size();
 
             // -2 means autosize - default to that
             CurrentPlaylistSongColumnWidth = -2;

@@ -70,12 +70,6 @@
     <Compile Include="Commands\CommandLine.cs" />
     <Compile Include="Lighting\FadeableValue.cs" />
     <Compile Include="Lighting\LightModule.cs" />
-    <Compile Include="Monitor.cs">
-      <SubType>Form</SubType>
-    </Compile>
-    <Compile Include="Monitor.Designer.cs">
-      <DependentUpon>Monitor.cs</DependentUpon>
-    </Compile>
     <Compile Include="Parsing\ColorDefFileParser.cs" />
     <Compile Include="Lighting\LEDColor.cs" />
     <Compile Include="Lighting\OpenDMX.cs" />
@@ -112,9 +106,6 @@
     </Compile>
     <EmbeddedResource Include="InitStatus.resx">
       <DependentUpon>InitStatus.cs</DependentUpon>
-    </EmbeddedResource>
-    <EmbeddedResource Include="Monitor.resx">
-      <DependentUpon>Monitor.cs</DependentUpon>
     </EmbeddedResource>
     <EmbeddedResource Include="PlaybackForm.resx">
       <DependentUpon>PlaybackForm.cs</DependentUpon>

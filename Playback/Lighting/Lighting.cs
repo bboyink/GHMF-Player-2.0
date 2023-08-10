@@ -1,4 +1,5 @@
-﻿using System.Linq;
+﻿using System.Drawing;
+using System.Linq;
 
 namespace Playback
 {
@@ -34,17 +35,6 @@ namespace Playback
                 System.Collections.Generic.IEnumerable<int> takenLights = modules1to7.Concat(additionalModules).SelectMany(i => i.LightIndices).Distinct();
                 // If it's in this list, then it's not ungrouped; if it's null, then it's not ungrouped; if it's light 0 (which is invalid), then it's not ungrouped
                 return new LightModule("Ungrouped", lights.Select((light, index) => new { light, index }).Where(l => l.light != null && l.index != 0 && l.light.Channels.Length > 0 && !l.light.HasRaw && !takenLights.Contains(l.index)).Select(l => l.index));
-            }
-        }
-        // This guy on the other hand is called on every update, which is why I have each light cache its color
-        public LEDColor[] LightColors
-        {
-            get
-            {
-                LEDColor[] colors = new LEDColor[lights.Length];
-                for (int i = 0; i < colors.Length; i++)
-                    colors[i] = lights[i].Color;
-                return colors;
             }
         }
         public string CurrentMotion { get; private set; }
@@ -93,6 +83,9 @@ namespace Playback
             if (overlaps.Count() > 0)
                 throw new System.NotSupportedException("Overlap on channel(s) " + string.Join(", ", overlaps.Select(c => c.Index)));
         }
+
+        // This guy is called on every update, which is why I have each light cache its color
+        public LEDColor GetLightColor(int index) { return lights[index].Color; }
 
         void shiftTimer_Elapsed(object sender, System.Timers.ElapsedEventArgs e)
         {
@@ -193,7 +186,7 @@ namespace Playback
 
         public void SetLightColor(int lightIndex, LEDColor color, double intensity = -1, bool lockColor = false)
         {
-            if (lights[lightIndex] != null)
+            if (lights.Length > lightIndex && lights[lightIndex] != null)
             {
                 lights[lightIndex].SetColor(intensity, color, lockColor);
                 UpdateMessage(lightIndex);
@@ -204,7 +197,7 @@ namespace Playback
 
         public void SetRawValue(int lightIndex, byte value)
         {
-            if (lights[lightIndex] != null)
+            if (lights.Length > lightIndex && lights[lightIndex] != null)
             {
                 if (lights[lightIndex].HasRaw)
                 {
@@ -219,13 +212,13 @@ namespace Playback
         public void FadeLight(int lightIndex, LEDColor targetColor, double targetIntensity, bool lockColor, int fadeTimeMilliseconds)
         {
             // So we need to fade from current intensity to finalValue over the course of fadeTimeMilliseconds
-            if (lights[lightIndex] != null)
+            if (lights.Length > lightIndex && lights[lightIndex] != null)
                 lights[lightIndex].Fade(targetIntensity, targetColor, lockColor, PlaybackForm.RefreshRate, fadeTimeMilliseconds);
         }
 
         public void FirmlyLockLight(int lightIndex, bool setLock)
         {
-            if (lights[lightIndex] != null)
+            if (lights.Length > lightIndex && lights[lightIndex] != null)
             {
                 lights[lightIndex].FirmlyLocked = setLock;
             }
@@ -302,8 +295,13 @@ namespace Playback
 
         public void UnlockLight(int lightIndex)
         {
-            lights[lightIndex].Locked = false;
-            UpdateMessage(lightIndex);
+            if (lights.Length > lightIndex && lights[lightIndex] != null)
+            {
+                lights[lightIndex].Locked = false;
+                UpdateMessage(lightIndex);
+            }
+            else
+                Logger.LogWarning("No light found at light index {0}", lightIndex);
         }
 
         public void SwapModuleLights(bool AtoB, bool BtoA)
@@ -361,7 +359,7 @@ namespace Playback
                 shifts++;
             else
                 shifts--;
-            shifts = shifts % modules1to7.Length;
+            shifts %= modules1to7.Length;
         }
 
         private int[] MapChannelForShift(int channelIndex, out bool lightsOut, out int[] clearIndices)
