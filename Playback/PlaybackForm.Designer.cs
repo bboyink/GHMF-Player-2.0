@@ -217,6 +217,7 @@
             this.lvPlaylists.View = System.Windows.Forms.View.Details;
             this.lvPlaylists.AfterLabelEdit += new System.Windows.Forms.LabelEditEventHandler(this.lvPlaylists_AfterLabelEdit);
             this.lvPlaylists.SelectedIndexChanged += new System.EventHandler(this.lvPlaylists_SelectedIndexChanged);
+            this.lvPlaylists.Click += new System.EventHandler(this.lvPlaylists_Click);
             this.lvPlaylists.KeyUp += new System.Windows.Forms.KeyEventHandler(this.lvPlaylists_KeyUp);
             // 
             // lvSongs
@@ -525,6 +526,7 @@
             this.lvCurPlaylistSongs.UseCompatibleStateImageBehavior = false;
             this.lvCurPlaylistSongs.View = System.Windows.Forms.View.Details;
             this.lvCurPlaylistSongs.SelectedIndexChanged += new System.EventHandler(this.lvCurPlaylistSongs_SelectedIndexChanged);
+            this.lvCurPlaylistSongs.Click += new System.EventHandler(this.lvCurPlaylistSongs_Click);
             // 
             // btnDeletePlaylist
             // 
@@ -663,7 +665,7 @@
             // 
             this.light45.Anchor = System.Windows.Forms.AnchorStyles.None;
             this.light45.LightNumber = 45;
-            this.light45.Location = new System.Drawing.Point(683, 100);
+            this.light45.Location = new System.Drawing.Point(683, 107);
             this.light45.Name = "light45";
             this.light45.Size = new System.Drawing.Size(20, 20);
             this.light45.TabIndex = 45;
@@ -672,7 +674,7 @@
             // 
             this.light44.Anchor = System.Windows.Forms.AnchorStyles.None;
             this.light44.LightNumber = 44;
-            this.light44.Location = new System.Drawing.Point(298, 100);
+            this.light44.Location = new System.Drawing.Point(298, 107);
             this.light44.Name = "light44";
             this.light44.Size = new System.Drawing.Size(20, 20);
             this.light44.TabIndex = 44;

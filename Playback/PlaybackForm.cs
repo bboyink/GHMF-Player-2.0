@@ -959,6 +959,17 @@ namespace Playback
         #region Announcements
 
         bool announcementInProgress = false;
+
+        private void lvPlaylists_Click(object sender, EventArgs e)
+        {
+            lvAnnouncements.SelectedIndices.Clear();
+        }
+
+        private void lvCurPlaylistSongs_Click(object sender, EventArgs e)
+        {
+            lvAnnouncements.SelectedIndices.Clear();
+        }
+
         private void btnAnnounce_Click(object sender, EventArgs e)
         {
             if (announcementInProgress)
@@ -1692,6 +1703,7 @@ namespace Playback
             }
             else
             {
+                ResizeColumns(lvAnnouncements);
                 btnAnnounce.Enabled = enable && lvAnnouncements.SelectedItems.Count > 0 && SoundController?.PlaybackState == Player.PlayState.Stopped;
             }
             UpdateAnnouncementButton();
@@ -2008,6 +2020,7 @@ namespace Playback
         {
             ResizeColumns(lvPlaylists);
             ResizeColumns(lvSongs);
+            ResizeColumns(lvAnnouncements);
 
             volMeter.Invalidate();
         }
