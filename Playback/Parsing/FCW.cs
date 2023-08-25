@@ -39,7 +39,9 @@ namespace Playback
         All = 53,
         Voice = 54,
         Helix = 11,
-        BackCurtain = 24,
+        BackCurtain_Legacy = 24,
+        BackCurtain = 57,
+        BackCurtainFade = 157,
         ModulesA = 49,
         ModulesB = 50,
 

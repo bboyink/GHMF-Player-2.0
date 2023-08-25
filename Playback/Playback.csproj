@@ -63,6 +63,12 @@
     <Compile Include="InitStatus.Designer.cs">
       <DependentUpon>InitStatus.cs</DependentUpon>
     </Compile>
+    <Compile Include="LightControl.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
+    <Compile Include="LightControl.Designer.cs">
+      <DependentUpon>LightControl.cs</DependentUpon>
+    </Compile>
     <Compile Include="Lighting\Channel.cs" />
     <Compile Include="Lighting\ChannelMapping.cs" />
     <Compile Include="Commands\Command.cs" />
@@ -106,6 +112,9 @@
     </Compile>
     <EmbeddedResource Include="InitStatus.resx">
       <DependentUpon>InitStatus.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="LightControl.resx">
+      <DependentUpon>LightControl.cs</DependentUpon>
     </EmbeddedResource>
     <EmbeddedResource Include="PlaybackForm.resx">
       <DependentUpon>PlaybackForm.cs</DependentUpon>

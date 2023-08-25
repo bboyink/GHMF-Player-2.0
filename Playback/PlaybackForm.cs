@@ -1012,7 +1012,7 @@ namespace Playback
 
         private void lvAnnouncements_SelectedIndexChanged(object sender, EventArgs e)
         {
-            btnAnnounce.Enabled = lvAnnouncements.SelectedItems.Count > 0 && SoundController?.PlaybackState == Player.PlayState.Stopped;
+            SetPlaybackEnable(initComplete);
 
             lvAnnouncements.Items.Cast<ListViewItem>()
                 .ToList().ForEach(item =>
@@ -1526,7 +1526,7 @@ namespace Playback
                 // The back curtain (024) is very special for a few reasons
                 // For one, it has its own special color scheme (16 = green, 32 = yellow)
                 // For another, if it's turned on it means none of the other FCWs may affect those lights
-                case (int)SpecialFCWAddress.BackCurtain:
+                case (int)SpecialFCWAddress.BackCurtain_Legacy:
                     switch (command.Data)
                     {
                         case 0:
@@ -1546,6 +1546,12 @@ namespace Playback
                     }
                     lockedColor = true;
                     break;
+
+                // All back curtain commands should lock our colors (though they use the standard coloration)
+                case (int)SpecialFCWAddress.BackCurtain:
+                case (int)SpecialFCWAddress.BackCurtainFade:
+                    lockedColor = true;
+                break;
 
                 // To my great surprise, there's only one allowed voice color, number 1
                 // Addendum, 4/30/2015: it seems the voice lights are also part of module 4, but this color overrides it
@@ -1686,7 +1692,7 @@ namespace Playback
             }
             else
             {
-                btnAnnounce.Enabled = enable && lvAnnouncements.SelectedItems.Count > 0;
+                btnAnnounce.Enabled = enable && lvAnnouncements.SelectedItems.Count > 0 && SoundController?.PlaybackState == Player.PlayState.Stopped;
             }
             UpdateAnnouncementButton();
         }
@@ -1717,37 +1723,65 @@ namespace Playback
                 catch (ObjectDisposedException) { } // This means we're closing anyways, so no need to update the UI anymore
                 return;
             }
+            tlpLists.SuspendLayout();
             if (enable)
             {
                 tlpLists.RowStyles[1].Height = 25;
+                tlpLists.RowStyles[2].SizeType = SizeType.Percent;
+                tlpLists.RowStyles[2].Height = 50;
                 tlpLists.RowStyles[5].Height = 30;
-                int numColumns = 0;
                 tlpLists.ColumnStyles[3].SizeType = SizeType.Percent;
                 tlpLists.ColumnStyles[4].SizeType = SizeType.Percent;
                 tlpLists.ColumnStyles[5].SizeType = SizeType.Percent;
-                for (int i = 0; i < tlpLists.ColumnStyles.Count; i++)
-                    if (tlpLists.ColumnStyles[i].SizeType == SizeType.Percent)
-                        numColumns++;
-                float size = 100 / (numColumns - 1); // There's a pair of columns that share
-                tlpLists.ColumnStyles[3].Width = size;
-                tlpLists.ColumnStyles[4].Width = size;
-                tlpLists.ColumnStyles[5].Width = size;
+                tlpLists.ColumnStyles[6].SizeType = SizeType.Absolute;
+                tlpLists.ColumnStyles[6].Width = 0;
+                tlpLists.ColumnStyles[7].SizeType = SizeType.Absolute;
+                tlpLists.ColumnStyles[7].Width = 0;
+                tlpLists.ColumnStyles[8].SizeType = SizeType.Absolute;
+                tlpLists.ColumnStyles[8].Width = 0;
+                tlpLists.SetColumn(btnAnnounce, 9);
+                tlpLists.SetColumnSpan(btnAnnounce, 4);
+                tlpLists.SetColumn(lvAnnouncements, 9);
+                tlpLists.SetColumnSpan(lvAnnouncements, 4);
+                tlpLists.SetRow(lvAnnouncements, 2);
+                tlpLists.SetRowSpan(lvAnnouncements, 1);
             }
             else
             {
                 tlpLists.RowStyles[1].Height = 0;
+                tlpLists.RowStyles[2].SizeType = SizeType.Absolute;
+                tlpLists.RowStyles[2].Height = 0;
                 tlpLists.RowStyles[5].Height = 0;
                 tlpLists.ColumnStyles[3].SizeType = SizeType.Absolute;
-                tlpLists.ColumnStyles[4].SizeType = SizeType.Absolute;
-                tlpLists.ColumnStyles[5].SizeType = SizeType.Absolute;
                 tlpLists.ColumnStyles[3].Width = 0;
+                tlpLists.ColumnStyles[4].SizeType = SizeType.Absolute;
                 tlpLists.ColumnStyles[4].Width = 0;
+                tlpLists.ColumnStyles[5].SizeType = SizeType.Absolute;
                 tlpLists.ColumnStyles[5].Width = 0;
+                tlpLists.ColumnStyles[6].SizeType = SizeType.Percent;
+                tlpLists.ColumnStyles[7].SizeType = SizeType.Percent;
+                tlpLists.ColumnStyles[8].SizeType = SizeType.Percent;
+                tlpLists.SetColumn(btnAnnounce, 6);
+                tlpLists.SetColumnSpan(btnAnnounce, 3);
+                tlpLists.SetColumn(lvAnnouncements, 6);
+                tlpLists.SetColumnSpan(lvAnnouncements, 3);
+                tlpLists.SetRow(lvAnnouncements, 3);
+                tlpLists.SetRowSpan(lvAnnouncements, 6);
             }
+            int numColumns = 0;
+            for (int i = 0; i < tlpLists.ColumnStyles.Count; i++)
+                if (tlpLists.ColumnStyles[i].SizeType == SizeType.Percent)
+                    numColumns++;
+            float size = 100 / (numColumns - 1);
+            for (int i = 0; i < tlpLists.ColumnStyles.Count; i++)
+                if (tlpLists.ColumnStyles[i].SizeType == SizeType.Percent)
+                    tlpLists.ColumnStyles[i].Width = size;
+            tlpLists.ResumeLayout();
             Logger.LogInfo("User logged {0}", enable ? "in" : "out");
             btnLogin.Text = enable ? "Log out" : "Log in";
             btnBrowsePlaylist.Visible = btnBrowseSong.Visible = enable;
             lblCurrentPlaylistFolder.Visible = lblCurrentSongFolder.Visible = enable;
+            lvSongs.Visible = enable;
             btnNewPlaylist.Visible = btnRenamePlaylist.Visible = btnDeletePlaylist.Visible = btnAddToPlaylist.Visible = btnRemoveFromPlaylist.Visible = btnMoveUp.Visible = btnMoveDown.Visible = enable;
             btnSettings.Visible = txtManualFCW.Visible = btnExecuteManualFCW.Visible = enable;
             lvPlaylists.LabelEdit = enable;
@@ -1845,22 +1879,10 @@ namespace Playback
                 return;
             }
 
-            foreach (Panel light in pnlFountain.Controls.OfType<Panel>())
+            foreach (LightControl light in pnlFountain.Controls.OfType<LightControl>())
             {
-                LEDColor color = LightController?.GetLightColor(int.Parse(light.Tag.ToString()));
-                Color newColor = Color.FromArgb(color?.R ?? 0, color?.G ?? 0, color?.B ?? 0);
-                if (light.ForeColor != newColor)
-                {
-                    light.ForeColor = newColor;
-                    light.Refresh();
-                }
+                light.SetColor(LightController?.GetLightColor(light.LightNumber));
             }
-        }
-
-        private void light_Paint(object sender, PaintEventArgs e)
-        {
-            Control source = (Control)sender;
-            e.Graphics.FillEllipse(new SolidBrush(source.ForeColor), 0, 0, source.Width - 1, source.Height - 1);
         }
 
         #endregion
@@ -1992,8 +2014,8 @@ namespace Playback
 
         private void ResizeColumns(ListView listView)
         {
-            // -2 to size to fit, but it seems just a little too much (we see horizontal scrollbars)
-            listView.Columns[0].Width = -2;
+            // -1 to size to fit contents, but it seems just a little too much (we see horizontal scrollbars)
+            listView.Columns[0].Width = -1;
             // So subtract a little!
             listView.Columns[0].Width -= 2;
         }
