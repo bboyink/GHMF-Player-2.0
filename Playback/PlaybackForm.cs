@@ -10,6 +10,15 @@ namespace Playback
     {
         public const int RefreshRate = 10;
 
+        // These probably don't need to be class-level, but this is a late addition to the project
+        // so I'm going with the first thing that comes to mind. Probably bad practice
+        private int totalFCWCount = 0;
+        private int lightFCWCount = 0;
+        private int waterFCWCount = 0;
+        private int totalFCWsExecuted = 0;
+        private int lightFCWsExecuted = 0;
+        private int waterFCWsSent = 0;
+
         private bool skipResetAfterSong = false;
 
         private Player SoundController;
@@ -1204,9 +1213,17 @@ namespace Playback
         {
             try
             {
+                waterFCWsSent = waterFCWCount = 0;
+                lightFCWsExecuted = lightFCWCount = 0;
+                totalFCWsExecuted = totalFCWCount = 0;
+
                 // New as of 6/1/2015: They want a 3-second "leader" to allow them a moment to see that the PLC is fully operational before the show begins
                 // Also, I'm told sometimes we miss the first 3 FCWs of a show, so this ensures those are dummy FCWs
                 PlayLeader(3000, 5);
+
+                waterFCWsSent = 0;
+                lightFCWsExecuted = 0;
+                totalFCWsExecuted = 0;
 
                 TimeSpan totalInShow = Player.GetTime(true, playlist.Songs);
 
@@ -1280,6 +1297,9 @@ namespace Playback
         {
             int cyclesPerRefresh = 5;
             int refreshNum = 0;
+            totalFCWCount += CountCommands(out int tempWaterFCWCount, out int tempLightFCWCount, commandFile);
+            waterFCWCount += tempWaterFCWCount;
+            lightFCWCount += tempLightFCWCount;
 
             CommandLine currentLine;
             TimeSpan timeInSong = TimeSpan.Zero;
@@ -1371,6 +1391,35 @@ namespace Playback
 
         #region Commands
 
+        private int CountCommands(out int waterCommands, out int lightCommands, params CommandFile[] commandFiles)
+        {
+            int totalCommands = 0;
+            waterCommands = 0;
+            lightCommands = 0;
+
+            foreach (CommandFile commandFile in commandFiles)
+            {
+                foreach (CommandLine line in commandFile.Commands)
+                {
+                    foreach (Command command in line.Commands)
+                    {
+                        FCW fcw = FCWs[command.Address];
+                        if (fcw == null) continue;
+
+                        if ((fcw.Type & FCWType.Water) != FCWType.None)
+                            waterCommands++;
+
+                        if ((fcw.Type & FCWType.Light) != FCWType.None)
+                            lightCommands++;
+
+                        totalCommands++;
+                    }
+                }
+            }
+
+            return totalCommands;
+        }
+
         private void ExecuteCommands(params Command[] commands)
         {
             // If we haven't finished loading in our FCWs this is going to be all sorts of problems
@@ -1381,6 +1430,8 @@ namespace Playback
             string joinedCommands = string.Join(" ", (object[])commands);
             Logger.LogDebug("Executing commands {0}", joinedCommands);
 
+            System.Collections.Generic.List<string> waterFCWs = new System.Collections.Generic.List<string>();
+            System.Collections.Generic.List<string> lightFCWs = new System.Collections.Generic.List<string>();
             for (int i = 0; i < commands.Length; i++)
             {
                 Command command = commands[i];
@@ -1431,10 +1482,16 @@ namespace Playback
 
                     if ((fcwToExecute.Type & FCWType.Water) != FCWType.None)
                     {
+                        waterFCWs.Add(command.ToString());
+                        // If it's just a water command, this is our only place to increment
+                        if (fcwToExecute.Type == FCWType.Water)
+                            totalFCWsExecuted++;
                         PLCController.AddToQueue(command.ToString());
                     }
                     if ((fcwToExecute.Type & FCWType.Light) != FCWType.None)
                     {
+                        lightFCWs.Add(command.ToString());
+
                         LEDColor newColor = GetColor(command, out double intensity, out bool lockedColor);
 
                         // Special case: if this is a fade command, we need the following command to tell us where we're fading to
@@ -1453,6 +1510,8 @@ namespace Playback
                                 continue;
                             }
                             newColor = GetColor(commands[i + 1], out intensity, out lockedColor);
+                            lightFCWsExecuted++;
+                            totalFCWsExecuted++;
                             i++; // Skip the next command (since it's just a color setter)
                         }
 
@@ -1490,10 +1549,15 @@ namespace Playback
                                     LightController.UnlockLight(light);
                             }
                         }
+                        lightFCWsExecuted++;
+                        totalFCWsExecuted++;
                     }
                     if ((fcwToExecute.Type & FCWType.Special) != FCWType.None)
                     {
                         ExecuteSpecialCommand(command);
+
+                        if (fcwToExecute.Type == FCWType.Special)
+                            totalFCWsExecuted++;
                     }
                 }
                 catch (Exception e)
@@ -1507,13 +1571,15 @@ namespace Playback
 
             try
             {
-                PLCController.SendQueue();
+                waterFCWsSent += PLCController.SendQueue();
             }
             catch (Exception e)
             {
                 ShowMessage("An error occurred sending to the PLC: " + Environment.NewLine + e.Message + Environment.NewLine + "Attempting to reconnect...");
                 Logger.LogError(e.ToString());
             }
+
+            UpdateFCWs(string.Join(" ", waterFCWs), string.Join(" ", lightFCWs), waterFCWsSent, waterFCWCount, lightFCWsExecuted, lightFCWCount, totalFCWsExecuted, totalFCWCount);
         }
 
         private LEDColor GetColor(Command command, out double intensity, out bool lockedColor)
@@ -1741,7 +1807,8 @@ namespace Playback
                 tlpLists.RowStyles[1].Height = 25;
                 tlpLists.RowStyles[2].SizeType = SizeType.Percent;
                 tlpLists.RowStyles[2].Height = 50;
-                tlpLists.RowStyles[5].Height = 30;
+                tlpLists.RowStyles[12].Height = 20;
+                tlpLists.RowStyles[13].Height = 20;
                 tlpLists.ColumnStyles[3].SizeType = SizeType.Percent;
                 tlpLists.ColumnStyles[4].SizeType = SizeType.Percent;
                 tlpLists.ColumnStyles[5].SizeType = SizeType.Percent;
@@ -1763,7 +1830,8 @@ namespace Playback
                 tlpLists.RowStyles[1].Height = 0;
                 tlpLists.RowStyles[2].SizeType = SizeType.Absolute;
                 tlpLists.RowStyles[2].Height = 0;
-                tlpLists.RowStyles[5].Height = 0;
+                tlpLists.RowStyles[12].Height = 0;
+                tlpLists.RowStyles[13].Height = 0;
                 tlpLists.ColumnStyles[3].SizeType = SizeType.Absolute;
                 tlpLists.ColumnStyles[3].Width = 0;
                 tlpLists.ColumnStyles[4].SizeType = SizeType.Absolute;
@@ -1825,6 +1893,28 @@ namespace Playback
             lblCurrentSong.Text = "Now Playing Song: " + songTitle;
             lblSongProgress.Text = "Song: " + timeInSong.ToDisplayTime() + " of " + totalInSong.ToDisplayTime() + " (" + totalInSong.Subtract(timeInSong).ToDisplayTime() + " remaining)";
             lblShowProgress.Text = "Show: " + timeInShow.ToDisplayTime() + " of " + totalInShow.ToDisplayTime() + " (" + totalInShow.Subtract(timeInShow).ToDisplayTime() + " remaining)";
+        }
+
+        public void UpdateFCWs(string waterFCWs, string lightFCWs, int waterFCWsDone, int waterFCWsTotal, int lightFCWsDone, int lightFCWsTotal, int allFCWsDone, int allFCWsTotal)
+        {
+            if (InvokeRequired)
+            {
+                try
+                {
+                    BeginInvoke(new Action(() => UpdateFCWs(waterFCWs, lightFCWs, waterFCWsDone, waterFCWsTotal, lightFCWsDone, lightFCWsTotal, allFCWsDone, allFCWsTotal)));
+                }
+                catch (ObjectDisposedException) { } // This means we're closing anyways, so no need to update the UI anymore
+                return;
+            }
+
+            if (waterFCWs.Length > 0)
+                lblWaterFCWs.Text = "Current Water FCW(s): " + waterFCWs;
+            if (lightFCWs.Length > 0)
+                lblLightFCWs.Text = "Current Light FCW(s): " + lightFCWs;
+
+            lblWaterFCWCount.Text = string.Format("{0}/{1}\nwater FCWs sent", waterFCWsDone, waterFCWsTotal);
+            lblLightFCWCount.Text = string.Format("{0}/{1}\nlight FCWs executed", lightFCWsDone, lightFCWsTotal);
+            lblTotalFCWCount.Text = string.Format("{0}/{1}\ntotal FCWs executed", allFCWsDone, allFCWsTotal);
         }
 
         void SoundController_VolumeChanged(object sender, float newVolLeft, float newVolRight)
