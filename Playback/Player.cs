@@ -38,8 +38,15 @@ namespace Playback
         {
             get
             {
-                if (audioOutput == null || waveStream.CurrentTime.TotalMilliseconds >= waveStream.TotalTime.TotalMilliseconds)
+                try
+                {
+                    if (audioOutput == null || waveStream.CurrentTime.TotalMilliseconds >= waveStream.TotalTime.TotalMilliseconds)
+                        return PlayState.Stopped;
+                }
+                catch (NullReferenceException)
+                {
                     return PlayState.Stopped;
+                }
                 if (paused)
                     return PlayState.Paused;
 
