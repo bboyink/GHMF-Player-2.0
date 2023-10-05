@@ -2011,7 +2011,7 @@ namespace Playback
                     StartPlayback();
                     break;
                 default: // If we're playing or paused, we want to full-stop
-                    if (MessageBox.Show("Are you sure you wish to stop the show?", "Stop Show?", MessageBoxButtons.YesNo, MessageBoxIcon.Question) == DialogResult.Yes)
+                    if (MessageBox.Show("Are you sure you wish to stop the show?\n\nBE SURE TO NOTE RESTART TIME OR NEXT SONG FIRST!", "Stop Show?", MessageBoxButtons.YesNo, MessageBoxIcon.Question) == DialogResult.Yes)
                     {
                         StopPlayback();
                     }
