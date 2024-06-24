@@ -1319,11 +1319,15 @@ namespace Playback
 
             Invoke(new Action(() => { UpdateAnnouncementButton(); }));
 
-            if (LoggedIn && TimeSpan.TryParse("00:" + txtStartPoint.Text, out TimeSpan skipToTime) && skipToTime < totalInSong)
+            if (txtStartPoint.Visible && TimeSpan.TryParse("00:" + txtStartPoint.Text, out TimeSpan skipToTime) && skipToTime < totalInSong)
             {
                 SoundController.SkipTo(skipToTime);
+                // Rush to the intended time - we have to execute every command to ensure we're in the right state
                 while (commandFile.GetCurrentLine() != null && commandFile.GetCurrentLine().TimeInMilliseconds < SoundController.GetPosition().TotalMilliseconds)
+                {
+                    ExecuteCommands(commandFile.GetCurrentLine().Commands);
                     commandFile.NextLine();
+                }
                 Invoke(new Action(() => { txtStartPoint.Text = ""; }));
             }
 
