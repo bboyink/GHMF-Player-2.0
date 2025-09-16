@@ -49,6 +49,9 @@ namespace Playback
         SwapAandB = 80,
         ShiftRotate = 85,
         SetShiftRotateTimer = 86,
+        Madrix1 = 900,
+        Madrix2 = 901,
+        Fireworks = 902,
         Reset = 99
     }
 

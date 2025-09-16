@@ -174,8 +174,13 @@ namespace Playback
         }
         private bool stopping = false;
 
+#if !TEST
         private bool plcDisabled = false;
         private bool dmxDisabled = false;
+#else
+        private bool plcDisabled = true;
+        private bool dmxDisabled = false;
+#endif
 
         #region Creation and Destruction
 
@@ -294,6 +299,7 @@ namespace Playback
             InitSound();
             InitLights();
             InitPLCComms();
+            //NAudio.MediaFoundation.MediaFoundationApi.Startup();
         }
 
         private void LoadFCWs()
@@ -397,7 +403,7 @@ namespace Playback
                 if (!Directory.Exists(fullDirPath))
                     fullDirPath = @"C:\"; // Fall back on the for-sure directory
 
-                LoadListView(lvSongs, lblCurrentSongFolder, fullDirPath, "*.wav");
+                LoadListView(lvSongs, lblCurrentSongFolder, fullDirPath, "*.wav;*.mp3",0,true);
 
                 SongsLoaded = true;
             }
@@ -447,7 +453,7 @@ namespace Playback
             currentNode.Expand();
         }
 
-        private void LoadListView(ListView listView, Label folderLabel, string directory, string filter, int selectedIndex = 0)
+        private void LoadListView(ListView listView, Label folderLabel, string directory, string filter, int selectedIndex = 0, bool withExtension = false)
         {
             // Since we're editing the controls, we gotta do it from the main thread
             if (InvokeRequired)
@@ -461,10 +467,17 @@ namespace Playback
             }
 
             listView.Items.Clear();
-            foreach (string file in Directory.GetFiles(directory, filter))
-                listView.Items.Add(new ListViewItem(Path.GetFileNameWithoutExtension(file)) { Tag = directory });
+
+            // Handle multiple filters (9-14-2025)
+            foreach (string pattern in filter.Split(';'))
+                foreach (string file in Directory.GetFiles(directory, pattern))
+                    if (withExtension)
+                        listView.Items.Add(new ListViewItem(Path.GetFileName(file)) { Tag = directory });
+                    else
+                        listView.Items.Add(new ListViewItem(Path.GetFileNameWithoutExtension(file)) { Tag = directory });
+
             if (listView.Items.Count > 0)
-                listView.Items[0].Selected = true;
+                        listView.Items[0].Selected = true;
 
             ResizeColumns(listView);
 
@@ -513,7 +526,7 @@ namespace Playback
                     else
                     {
                         songToAdd = LoggedIn ? song : Path.GetFileNameWithoutExtension(song);
-                        artist = GetArtistName(song);
+                        artist = ""; // GetArtistName(song);
                     }
                     lvCurPlaylistSongs.Items.Add(new ListViewItem(new[] { songToAdd, artist }));
                 }
@@ -689,6 +702,7 @@ namespace Playback
         {
             try
             {
+                //NAudio.MediaFoundation.MediaFoundationApi.Shutdown();
                 StopPlayback(); // Mostly to be sure we send out the PLC message, in case they close in the middle of playing
             }
             catch { } // Don't really care at this point
@@ -735,14 +749,16 @@ namespace Playback
 
             if (!connected)
             {
+#if !TEST
                 ShowMessage("The DMX controller has become disconnected. Attempting to reconnect. Please check your connection.");
+#endif
                 LightController.ReconnectDMX();
             }
 
             LightsInitd = connected;
         }
 
-        #endregion
+#endregion
 
         #region Playlists
 
@@ -890,7 +906,7 @@ namespace Playback
 
             if (lvSongs.SelectedItems.Count > 0)
             {
-                CurrentPlaylist.AddSong(Path.Combine(songFolderBrowser.SelectedPath, lvSongs.SelectedItems[0].Text + ".wav"));
+                CurrentPlaylist.AddSong(Path.Combine(songFolderBrowser.SelectedPath, lvSongs.SelectedItems[0].Text));
                 CurrentPlaylist.Save();
                 LoadPlaylist();
             }
@@ -1219,7 +1235,9 @@ namespace Playback
 
                 // New as of 6/1/2015: They want a 3-second "leader" to allow them a moment to see that the PLC is fully operational before the show begins
                 // Also, I'm told sometimes we miss the first 3 FCWs of a show, so this ensures those are dummy FCWs
+#if !TEST
                 PlayLeader(3000, 5);
+#endif
 
                 waterFCWsSent = 0;
                 lightFCWsExecuted = 0;
@@ -1391,7 +1409,7 @@ namespace Playback
             }
         }
 
-        #endregion
+#endregion
 
         #region Commands
 
@@ -1446,7 +1464,7 @@ namespace Playback
                     {
                         fcwToExecute = FCWs[command.Address];
                         if (fcwToExecute == null)
-                            throw new NullReferenceException();
+                            continue; // command doesn't exist so ignore it
                     }
                     catch (Exception e)
                     {
@@ -1706,6 +1724,10 @@ namespace Playback
                             Logger.LogInfo("Will skip light reset after current song");
                             break;
                     }
+                    break;
+                case (int)SpecialFCWAddress.Madrix1:
+                case (int)SpecialFCWAddress.Madrix2:
+                case (int)SpecialFCWAddress.Fireworks:
                     break;
             }
         }
@@ -2004,7 +2026,7 @@ namespace Playback
         private void btnBrowseSong_Click(object sender, EventArgs e)
         {
             if (songFolderBrowser.ShowDialog(this) == DialogResult.OK)
-                LoadListView(lvSongs, lblCurrentSongFolder, songFolderBrowser.SelectedPath, "*.wav");
+                LoadListView(lvSongs, lblCurrentSongFolder, songFolderBrowser.SelectedPath, "*.wav;*.mp3",0,true);
         }
 
         private void btnStartStop_Click(object sender, EventArgs e)
@@ -2015,7 +2037,9 @@ namespace Playback
                     StartPlayback();
                     break;
                 default: // If we're playing or paused, we want to full-stop
+#if !TEST
                     if (MessageBox.Show("Are you sure you wish to stop the show?\n\nBE SURE TO NOTE RESTART TIME OR NEXT SONG FIRST!", "Stop Show?", MessageBoxButtons.YesNo, MessageBoxIcon.Question) == DialogResult.Yes)
+#endif
                     {
                         StopPlayback();
                     }
@@ -2054,9 +2078,10 @@ namespace Playback
 
         private void btnLogin_Click(object sender, EventArgs e)
         {
+#if !TEST
             if (!LoggedIn)
             {
-                string password = "APEX8422"; // Default
+                string password = "GHMF8422"; // Default
                 string passwordFile = Path.Combine(@"C:\", "GHMF", "Config", "GHMFP.pas");
                 if (File.Exists(passwordFile))
                 {
@@ -2070,13 +2095,16 @@ namespace Playback
                     }
                 }
 
-                using (LoginForm loginForm = new LoginForm(password, "APEX8373")) // Yeah, I'm adding in a backdoor, at Terry's request, but really this ain't no high-level security to begin with
+                using (LoginForm loginForm = new LoginForm(password, "GHMF8373")) // Yeah, I'm adding in a backdoor, at Terry's request, but really this ain't no high-level security to begin with
                 {
                     LoggedIn = (loginForm.ShowDialog(this) == DialogResult.OK);
                 }
             }
             else
                 LoggedIn = false;
+#else
+            LoggedIn = !LoggedIn;
+#endif
         }
 
         private void btnSettings_Click(object sender, EventArgs e)
@@ -2127,7 +2155,7 @@ namespace Playback
             listView.Columns[0].Width -= 2;
         }
 
-        #endregion
+#endregion
 
         #region Utilities
 
@@ -2143,6 +2171,7 @@ namespace Playback
 
         internal static string GetArtistName(string fileName)
         {
+            /*
             try
             {
                 int artistHeader = 13; // Found by looping through all possibilities - I suppose on a different version of Windows this might not work
@@ -2159,6 +2188,8 @@ namespace Playback
                 Logger.LogError(e.ToString());
                 return "<Artist Info Unavailable>";
             }
+            */
+            return "";
         }
 
         private static Shell32.Folder GetShell32NameSpaceFolder(string folder)

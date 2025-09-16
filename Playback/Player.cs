@@ -1,4 +1,5 @@
 ﻿using System;
+using System.IO;
 using System.Linq;
 using NAudio.Wave;
 using NAudio.Wave.SampleProviders;
@@ -214,7 +215,7 @@ namespace Playback
             Reset();
 
             memStream = null;
-            waveStream = new WaveFileReader(soundFile);
+            waveStream = new MediaFoundationReader(soundFile);
             Initialize(waveStream);
         }
 
@@ -317,7 +318,7 @@ namespace Playback
             TimeSpan totalTime = new TimeSpan();
             foreach (string songName in songNames)
                 if (System.IO.File.Exists(songName))
-                    using (WaveFileReader tempReader = new WaveFileReader(songName))
+                    using (MediaFoundationReader tempReader = new MediaFoundationReader(songName))
                     {
                         if (truncate)
                             totalTime = totalTime.Add(tempReader.TotalTime.Truncate());

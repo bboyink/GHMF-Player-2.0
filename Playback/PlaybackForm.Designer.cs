@@ -61,6 +61,14 @@
             this.lblStartPoint = new System.Windows.Forms.Label();
             this.volMeter = new NAudio.Gui.VolumeMeter();
             this.pnlFountain = new System.Windows.Forms.Panel();
+            this.light53 = new Playback.LightControl();
+            this.light52 = new Playback.LightControl();
+            this.light51 = new Playback.LightControl();
+            this.light50 = new Playback.LightControl();
+            this.light49 = new Playback.LightControl();
+            this.light48 = new Playback.LightControl();
+            this.light47 = new Playback.LightControl();
+            this.light46 = new Playback.LightControl();
             this.light45 = new Playback.LightControl();
             this.light44 = new Playback.LightControl();
             this.light41 = new Playback.LightControl();
@@ -112,11 +120,11 @@
             this.ttVolume = new System.Windows.Forms.ToolTip(this.components);
             this.playlistFolderBrowser = new System.Windows.Forms.FolderBrowserDialog();
             this.songFolderBrowser = new System.Windows.Forms.FolderBrowserDialog();
-            colName = ((System.Windows.Forms.ColumnHeader)(new System.Windows.Forms.ColumnHeader()));
-            colCurPlaylistSongName = ((System.Windows.Forms.ColumnHeader)(new System.Windows.Forms.ColumnHeader()));
-            colPlaylistName = ((System.Windows.Forms.ColumnHeader)(new System.Windows.Forms.ColumnHeader()));
-            colSongName = ((System.Windows.Forms.ColumnHeader)(new System.Windows.Forms.ColumnHeader()));
-            colCurPlaylistSongArtist = ((System.Windows.Forms.ColumnHeader)(new System.Windows.Forms.ColumnHeader()));
+            colName = new System.Windows.Forms.ColumnHeader();
+            colCurPlaylistSongName = new System.Windows.Forms.ColumnHeader();
+            colPlaylistName = new System.Windows.Forms.ColumnHeader();
+            colSongName = new System.Windows.Forms.ColumnHeader();
+            colCurPlaylistSongArtist = new System.Windows.Forms.ColumnHeader();
             ((System.ComponentModel.ISupportInitialize)(this.barVolLeftChannel)).BeginInit();
             this.tlpLists.SuspendLayout();
             this.pnlFountain.SuspendLayout();
@@ -148,9 +156,9 @@
             // btnStartStop
             // 
             this.btnStartStop.Dock = System.Windows.Forms.DockStyle.Fill;
-            this.btnStartStop.Location = new System.Drawing.Point(591, 346);
+            this.btnStartStop.Location = new System.Drawing.Point(585, 382);
             this.btnStartStop.Name = "btnStartStop";
-            this.btnStartStop.Size = new System.Drawing.Size(82, 24);
+            this.btnStartStop.Size = new System.Drawing.Size(81, 24);
             this.btnStartStop.TabIndex = 0;
             this.btnStartStop.Text = "Start Show";
             this.btnStartStop.UseVisualStyleBackColor = true;
@@ -159,9 +167,9 @@
             // btnPauseResume
             // 
             this.btnPauseResume.Dock = System.Windows.Forms.DockStyle.Fill;
-            this.btnPauseResume.Location = new System.Drawing.Point(855, 346);
+            this.btnPauseResume.Location = new System.Drawing.Point(846, 382);
             this.btnPauseResume.Name = "btnPauseResume";
-            this.btnPauseResume.Size = new System.Drawing.Size(82, 24);
+            this.btnPauseResume.Size = new System.Drawing.Size(81, 24);
             this.btnPauseResume.TabIndex = 1;
             this.btnPauseResume.Text = "Pause Show";
             this.btnPauseResume.UseVisualStyleBackColor = true;
@@ -171,12 +179,12 @@
             // 
             this.barVolLeftChannel.Dock = System.Windows.Forms.DockStyle.Fill;
             this.barVolLeftChannel.LargeChange = 0;
-            this.barVolLeftChannel.Location = new System.Drawing.Point(959, 33);
+            this.barVolLeftChannel.Location = new System.Drawing.Point(949, 33);
             this.barVolLeftChannel.Maximum = 100;
             this.barVolLeftChannel.Name = "barVolLeftChannel";
             this.barVolLeftChannel.Orientation = System.Windows.Forms.Orientation.Vertical;
             this.tlpLists.SetRowSpan(this.barVolLeftChannel, 8);
-            this.barVolLeftChannel.Size = new System.Drawing.Size(46, 545);
+            this.barVolLeftChannel.Size = new System.Drawing.Size(54, 617);
             this.barVolLeftChannel.TabIndex = 7;
             this.barVolLeftChannel.TickFrequency = 5;
             this.barVolLeftChannel.ValueChanged += new System.EventHandler(this.barVolume_ValueChanged);
@@ -184,9 +192,9 @@
             // btnSettings
             // 
             this.btnSettings.Dock = System.Windows.Forms.DockStyle.Fill;
-            this.btnSettings.Location = new System.Drawing.Point(179, 614);
+            this.btnSettings.Location = new System.Drawing.Point(177, 686);
             this.btnSettings.Name = "btnSettings";
-            this.btnSettings.Size = new System.Drawing.Size(82, 24);
+            this.btnSettings.Size = new System.Drawing.Size(81, 24);
             this.btnSettings.TabIndex = 11;
             this.btnSettings.Text = "Settings";
             this.btnSettings.UseVisualStyleBackColor = true;
@@ -195,9 +203,9 @@
             // btnLogin
             // 
             this.btnLogin.Dock = System.Windows.Forms.DockStyle.Fill;
-            this.btnLogin.Location = new System.Drawing.Point(3, 614);
+            this.btnLogin.Location = new System.Drawing.Point(3, 686);
             this.btnLogin.Name = "btnLogin";
-            this.btnLogin.Size = new System.Drawing.Size(82, 24);
+            this.btnLogin.Size = new System.Drawing.Size(81, 24);
             this.btnLogin.TabIndex = 9;
             this.btnLogin.Text = "Log in";
             this.btnLogin.UseVisualStyleBackColor = true;
@@ -216,7 +224,7 @@
             this.lvPlaylists.MultiSelect = false;
             this.lvPlaylists.Name = "lvPlaylists";
             this.tlpLists.SetRowSpan(this.lvPlaylists, 7);
-            this.lvPlaylists.Size = new System.Drawing.Size(258, 520);
+            this.lvPlaylists.Size = new System.Drawing.Size(255, 592);
             this.lvPlaylists.TabIndex = 2;
             this.lvPlaylists.UseCompatibleStateImageBehavior = false;
             this.lvPlaylists.View = System.Windows.Forms.View.Details;
@@ -234,11 +242,11 @@
             this.lvSongs.Font = new System.Drawing.Font("Microsoft Sans Serif", 10F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
             this.lvSongs.HeaderStyle = System.Windows.Forms.ColumnHeaderStyle.None;
             this.lvSongs.HideSelection = false;
-            this.lvSongs.Location = new System.Drawing.Point(267, 58);
+            this.lvSongs.Location = new System.Drawing.Point(264, 58);
             this.lvSongs.MultiSelect = false;
             this.lvSongs.Name = "lvSongs";
             this.tlpLists.SetRowSpan(this.lvSongs, 7);
-            this.lvSongs.Size = new System.Drawing.Size(258, 520);
+            this.lvSongs.Size = new System.Drawing.Size(255, 592);
             this.lvSongs.TabIndex = 3;
             this.lvSongs.UseCompatibleStateImageBehavior = false;
             this.lvSongs.View = System.Windows.Forms.View.Details;
@@ -247,9 +255,9 @@
             // btnConnectDMX
             // 
             this.btnConnectDMX.Dock = System.Windows.Forms.DockStyle.Fill;
-            this.btnConnectDMX.Location = new System.Drawing.Point(855, 614);
+            this.btnConnectDMX.Location = new System.Drawing.Point(846, 686);
             this.btnConnectDMX.Name = "btnConnectDMX";
-            this.btnConnectDMX.Size = new System.Drawing.Size(82, 24);
+            this.btnConnectDMX.Size = new System.Drawing.Size(81, 24);
             this.btnConnectDMX.TabIndex = 14;
             this.btnConnectDMX.Text = "Connect DMX";
             this.btnConnectDMX.UseVisualStyleBackColor = true;
@@ -259,18 +267,18 @@
             // 
             this.tlpLists.SetColumnSpan(this.txtManualFCW, 2);
             this.txtManualFCW.Dock = System.Windows.Forms.DockStyle.Fill;
-            this.txtManualFCW.Location = new System.Drawing.Point(267, 614);
+            this.txtManualFCW.Location = new System.Drawing.Point(264, 686);
             this.txtManualFCW.Name = "txtManualFCW";
-            this.txtManualFCW.Size = new System.Drawing.Size(170, 20);
+            this.txtManualFCW.Size = new System.Drawing.Size(168, 20);
             this.txtManualFCW.TabIndex = 12;
             this.txtManualFCW.KeyPress += new System.Windows.Forms.KeyPressEventHandler(this.txtManualFCW_KeyPress);
             // 
             // btnExecuteManualFCW
             // 
             this.btnExecuteManualFCW.Dock = System.Windows.Forms.DockStyle.Fill;
-            this.btnExecuteManualFCW.Location = new System.Drawing.Point(443, 614);
+            this.btnExecuteManualFCW.Location = new System.Drawing.Point(438, 686);
             this.btnExecuteManualFCW.Name = "btnExecuteManualFCW";
-            this.btnExecuteManualFCW.Size = new System.Drawing.Size(82, 24);
+            this.btnExecuteManualFCW.Size = new System.Drawing.Size(81, 24);
             this.btnExecuteManualFCW.TabIndex = 13;
             this.btnExecuteManualFCW.Text = "Execute";
             this.btnExecuteManualFCW.UseVisualStyleBackColor = true;
@@ -293,7 +301,7 @@
             this.tlpLists.ColumnStyles.Add(new System.Windows.Forms.ColumnStyle(System.Windows.Forms.SizeType.Percent, 10F));
             this.tlpLists.ColumnStyles.Add(new System.Windows.Forms.ColumnStyle(System.Windows.Forms.SizeType.Percent, 10F));
             this.tlpLists.ColumnStyles.Add(new System.Windows.Forms.ColumnStyle(System.Windows.Forms.SizeType.Absolute, 16F));
-            this.tlpLists.ColumnStyles.Add(new System.Windows.Forms.ColumnStyle(System.Windows.Forms.SizeType.Absolute, 52F));
+            this.tlpLists.ColumnStyles.Add(new System.Windows.Forms.ColumnStyle(System.Windows.Forms.SizeType.Absolute, 60F));
             this.tlpLists.Controls.Add(this.lblLightFCWCount, 1, 12);
             this.tlpLists.Controls.Add(this.lblTotalFCWCount, 2, 12);
             this.tlpLists.Controls.Add(this.lblWaterFCWCount, 0, 12);
@@ -354,13 +362,13 @@
             this.tlpLists.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Absolute, 20F));
             this.tlpLists.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Absolute, 20F));
             this.tlpLists.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Absolute, 20F));
-            this.tlpLists.Size = new System.Drawing.Size(1008, 961);
+            this.tlpLists.Size = new System.Drawing.Size(1006, 1032);
             this.tlpLists.TabIndex = 0;
             // 
             // lblLightFCWCount
             // 
             this.lblLightFCWCount.AutoSize = true;
-            this.lblLightFCWCount.Location = new System.Drawing.Point(92, 920);
+            this.lblLightFCWCount.Location = new System.Drawing.Point(91, 992);
             this.lblLightFCWCount.Margin = new System.Windows.Forms.Padding(4, 0, 4, 0);
             this.lblLightFCWCount.Name = "lblLightFCWCount";
             this.tlpLists.SetRowSpan(this.lblLightFCWCount, 2);
@@ -371,7 +379,7 @@
             // lblTotalFCWCount
             // 
             this.lblTotalFCWCount.AutoSize = true;
-            this.lblTotalFCWCount.Location = new System.Drawing.Point(180, 920);
+            this.lblTotalFCWCount.Location = new System.Drawing.Point(178, 992);
             this.lblTotalFCWCount.Margin = new System.Windows.Forms.Padding(4, 0, 4, 0);
             this.lblTotalFCWCount.Name = "lblTotalFCWCount";
             this.tlpLists.SetRowSpan(this.lblTotalFCWCount, 2);
@@ -382,7 +390,7 @@
             // lblWaterFCWCount
             // 
             this.lblWaterFCWCount.AutoSize = true;
-            this.lblWaterFCWCount.Location = new System.Drawing.Point(4, 920);
+            this.lblWaterFCWCount.Location = new System.Drawing.Point(4, 992);
             this.lblWaterFCWCount.Margin = new System.Windows.Forms.Padding(4, 0, 4, 0);
             this.lblWaterFCWCount.Name = "lblWaterFCWCount";
             this.tlpLists.SetRowSpan(this.lblWaterFCWCount, 2);
@@ -394,7 +402,7 @@
             // 
             this.lblLightFCWs.AutoSize = true;
             this.tlpLists.SetColumnSpan(this.lblLightFCWs, 11);
-            this.lblLightFCWs.Location = new System.Drawing.Point(356, 920);
+            this.lblLightFCWs.Location = new System.Drawing.Point(352, 992);
             this.lblLightFCWs.Margin = new System.Windows.Forms.Padding(4, 0, 4, 0);
             this.lblLightFCWs.Name = "lblLightFCWs";
             this.lblLightFCWs.Size = new System.Drawing.Size(108, 13);
@@ -405,7 +413,7 @@
             // 
             this.lblWaterFCWs.AutoSize = true;
             this.tlpLists.SetColumnSpan(this.lblWaterFCWs, 11);
-            this.lblWaterFCWs.Location = new System.Drawing.Point(356, 940);
+            this.lblWaterFCWs.Location = new System.Drawing.Point(352, 1012);
             this.lblWaterFCWs.Margin = new System.Windows.Forms.Padding(4, 0, 4, 0);
             this.lblWaterFCWs.Name = "lblWaterFCWs";
             this.lblWaterFCWs.Size = new System.Drawing.Size(114, 13);
@@ -417,9 +425,9 @@
             this.tlpLists.SetColumnSpan(this.lblCurrentShow, 4);
             this.lblCurrentShow.Dock = System.Windows.Forms.DockStyle.Fill;
             this.lblCurrentShow.Font = new System.Drawing.Font("Microsoft Sans Serif", 10F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
-            this.lblCurrentShow.Location = new System.Drawing.Point(591, 263);
+            this.lblCurrentShow.Location = new System.Drawing.Point(585, 299);
             this.lblCurrentShow.Name = "lblCurrentShow";
-            this.lblCurrentShow.Size = new System.Drawing.Size(346, 20);
+            this.lblCurrentShow.Size = new System.Drawing.Size(342, 20);
             this.lblCurrentShow.TabIndex = 4;
             this.lblCurrentShow.Text = "Now Playing Show: ";
             this.lblCurrentShow.TextAlign = System.Drawing.ContentAlignment.TopCenter;
@@ -430,9 +438,9 @@
             this.tlpLists.SetColumnSpan(this.lblCurrentSongFolder, 3);
             this.lblCurrentSongFolder.Dock = System.Windows.Forms.DockStyle.Bottom;
             this.lblCurrentSongFolder.Font = new System.Drawing.Font("Microsoft Sans Serif", 10F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
-            this.lblCurrentSongFolder.Location = new System.Drawing.Point(267, 35);
+            this.lblCurrentSongFolder.Location = new System.Drawing.Point(264, 35);
             this.lblCurrentSongFolder.Name = "lblCurrentSongFolder";
-            this.lblCurrentSongFolder.Size = new System.Drawing.Size(258, 20);
+            this.lblCurrentSongFolder.Size = new System.Drawing.Size(255, 20);
             this.lblCurrentSongFolder.TabIndex = 28;
             // 
             // lblCurrentSong
@@ -440,9 +448,9 @@
             this.tlpLists.SetColumnSpan(this.lblCurrentSong, 4);
             this.lblCurrentSong.Dock = System.Windows.Forms.DockStyle.Fill;
             this.lblCurrentSong.Font = new System.Drawing.Font("Microsoft Sans Serif", 10F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
-            this.lblCurrentSong.Location = new System.Drawing.Point(591, 283);
+            this.lblCurrentSong.Location = new System.Drawing.Point(585, 319);
             this.lblCurrentSong.Name = "lblCurrentSong";
-            this.lblCurrentSong.Size = new System.Drawing.Size(346, 20);
+            this.lblCurrentSong.Size = new System.Drawing.Size(342, 20);
             this.lblCurrentSong.TabIndex = 0;
             this.lblCurrentSong.Text = "Now Playing Song: ";
             this.lblCurrentSong.TextAlign = System.Drawing.ContentAlignment.TopCenter;
@@ -455,7 +463,7 @@
             this.lblCurrentPlaylistFolder.Font = new System.Drawing.Font("Microsoft Sans Serif", 10F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
             this.lblCurrentPlaylistFolder.Location = new System.Drawing.Point(3, 35);
             this.lblCurrentPlaylistFolder.Name = "lblCurrentPlaylistFolder";
-            this.lblCurrentPlaylistFolder.Size = new System.Drawing.Size(258, 20);
+            this.lblCurrentPlaylistFolder.Size = new System.Drawing.Size(255, 20);
             this.lblCurrentPlaylistFolder.TabIndex = 27;
             // 
             // lblSongProgress
@@ -463,9 +471,9 @@
             this.tlpLists.SetColumnSpan(this.lblSongProgress, 4);
             this.lblSongProgress.Dock = System.Windows.Forms.DockStyle.Fill;
             this.lblSongProgress.Font = new System.Drawing.Font("Microsoft Sans Serif", 10F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
-            this.lblSongProgress.Location = new System.Drawing.Point(591, 303);
+            this.lblSongProgress.Location = new System.Drawing.Point(585, 339);
             this.lblSongProgress.Name = "lblSongProgress";
-            this.lblSongProgress.Size = new System.Drawing.Size(346, 20);
+            this.lblSongProgress.Size = new System.Drawing.Size(342, 20);
             this.lblSongProgress.TabIndex = 1;
             this.lblSongProgress.Text = "Song Now : Song Total";
             this.lblSongProgress.TextAlign = System.Drawing.ContentAlignment.TopCenter;
@@ -476,9 +484,9 @@
             this.tlpLists.SetColumnSpan(this.lblVolume, 2);
             this.lblVolume.Dock = System.Windows.Forms.DockStyle.Bottom;
             this.lblVolume.Font = new System.Drawing.Font("Microsoft Sans Serif", 9F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
-            this.lblVolume.Location = new System.Drawing.Point(943, 0);
+            this.lblVolume.Location = new System.Drawing.Point(933, 0);
             this.lblVolume.Name = "lblVolume";
-            this.lblVolume.Size = new System.Drawing.Size(62, 30);
+            this.lblVolume.Size = new System.Drawing.Size(70, 30);
             this.lblVolume.TabIndex = 26;
             this.lblVolume.Text = "Audience Volume";
             this.lblVolume.TextAlign = System.Drawing.ContentAlignment.BottomCenter;
@@ -486,9 +494,9 @@
             // btnMoveDown
             // 
             this.btnMoveDown.Dock = System.Windows.Forms.DockStyle.Fill;
-            this.btnMoveDown.Location = new System.Drawing.Point(855, 584);
+            this.btnMoveDown.Location = new System.Drawing.Point(846, 656);
             this.btnMoveDown.Name = "btnMoveDown";
-            this.btnMoveDown.Size = new System.Drawing.Size(82, 24);
+            this.btnMoveDown.Size = new System.Drawing.Size(81, 24);
             this.btnMoveDown.TabIndex = 21;
             this.btnMoveDown.Text = "Move Down";
             this.btnMoveDown.UseVisualStyleBackColor = true;
@@ -499,9 +507,9 @@
             this.tlpLists.SetColumnSpan(this.btnAnnounce, 4);
             this.btnAnnounce.Dock = System.Windows.Forms.DockStyle.Fill;
             this.btnAnnounce.Enabled = false;
-            this.btnAnnounce.Location = new System.Drawing.Point(591, 3);
+            this.btnAnnounce.Location = new System.Drawing.Point(585, 3);
             this.btnAnnounce.Name = "btnAnnounce";
-            this.btnAnnounce.Size = new System.Drawing.Size(346, 24);
+            this.btnAnnounce.Size = new System.Drawing.Size(342, 24);
             this.btnAnnounce.TabIndex = 6;
             this.btnAnnounce.Text = "PLAY ANNOUNCEMENT";
             this.btnAnnounce.UseVisualStyleBackColor = true;
@@ -511,9 +519,9 @@
             // btnBrowseSong
             // 
             this.btnBrowseSong.Dock = System.Windows.Forms.DockStyle.Fill;
-            this.btnBrowseSong.Location = new System.Drawing.Point(443, 3);
+            this.btnBrowseSong.Location = new System.Drawing.Point(438, 3);
             this.btnBrowseSong.Name = "btnBrowseSong";
-            this.btnBrowseSong.Size = new System.Drawing.Size(82, 24);
+            this.btnBrowseSong.Size = new System.Drawing.Size(81, 24);
             this.btnBrowseSong.TabIndex = 23;
             this.btnBrowseSong.Text = "Browse...";
             this.btnBrowseSong.UseVisualStyleBackColor = true;
@@ -525,18 +533,18 @@
             this.tlpLists.SetColumnSpan(this.lblSongSelection, 2);
             this.lblSongSelection.Dock = System.Windows.Forms.DockStyle.Bottom;
             this.lblSongSelection.Font = new System.Drawing.Font("Microsoft Sans Serif", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
-            this.lblSongSelection.Location = new System.Drawing.Point(267, 10);
+            this.lblSongSelection.Location = new System.Drawing.Point(264, 10);
             this.lblSongSelection.Name = "lblSongSelection";
-            this.lblSongSelection.Size = new System.Drawing.Size(170, 20);
+            this.lblSongSelection.Size = new System.Drawing.Size(168, 20);
             this.lblSongSelection.TabIndex = 25;
             this.lblSongSelection.Text = "Song Selection";
             // 
             // btnRemoveFromPlaylist
             // 
             this.btnRemoveFromPlaylist.Dock = System.Windows.Forms.DockStyle.Fill;
-            this.btnRemoveFromPlaylist.Location = new System.Drawing.Point(591, 584);
+            this.btnRemoveFromPlaylist.Location = new System.Drawing.Point(585, 656);
             this.btnRemoveFromPlaylist.Name = "btnRemoveFromPlaylist";
-            this.btnRemoveFromPlaylist.Size = new System.Drawing.Size(82, 24);
+            this.btnRemoveFromPlaylist.Size = new System.Drawing.Size(81, 24);
             this.btnRemoveFromPlaylist.TabIndex = 19;
             this.btnRemoveFromPlaylist.Text = "<-- Remove";
             this.btnRemoveFromPlaylist.UseVisualStyleBackColor = true;
@@ -545,9 +553,9 @@
             // btnMoveUp
             // 
             this.btnMoveUp.Dock = System.Windows.Forms.DockStyle.Fill;
-            this.btnMoveUp.Location = new System.Drawing.Point(767, 584);
+            this.btnMoveUp.Location = new System.Drawing.Point(759, 656);
             this.btnMoveUp.Name = "btnMoveUp";
-            this.btnMoveUp.Size = new System.Drawing.Size(82, 24);
+            this.btnMoveUp.Size = new System.Drawing.Size(81, 24);
             this.btnMoveUp.TabIndex = 20;
             this.btnMoveUp.Text = "Move Up";
             this.btnMoveUp.UseVisualStyleBackColor = true;
@@ -556,9 +564,9 @@
             // btnBrowsePlaylist
             // 
             this.btnBrowsePlaylist.Dock = System.Windows.Forms.DockStyle.Fill;
-            this.btnBrowsePlaylist.Location = new System.Drawing.Point(179, 3);
+            this.btnBrowsePlaylist.Location = new System.Drawing.Point(177, 3);
             this.btnBrowsePlaylist.Name = "btnBrowsePlaylist";
-            this.btnBrowsePlaylist.Size = new System.Drawing.Size(82, 24);
+            this.btnBrowsePlaylist.Size = new System.Drawing.Size(81, 24);
             this.btnBrowsePlaylist.TabIndex = 22;
             this.btnBrowsePlaylist.Text = "Browse...";
             this.btnBrowsePlaylist.UseVisualStyleBackColor = true;
@@ -567,9 +575,9 @@
             // btnRenamePlaylist
             // 
             this.btnRenamePlaylist.Dock = System.Windows.Forms.DockStyle.Fill;
-            this.btnRenamePlaylist.Location = new System.Drawing.Point(179, 584);
+            this.btnRenamePlaylist.Location = new System.Drawing.Point(177, 656);
             this.btnRenamePlaylist.Name = "btnRenamePlaylist";
-            this.btnRenamePlaylist.Size = new System.Drawing.Size(82, 24);
+            this.btnRenamePlaylist.Size = new System.Drawing.Size(81, 24);
             this.btnRenamePlaylist.TabIndex = 17;
             this.btnRenamePlaylist.Text = "Rename";
             this.btnRenamePlaylist.UseVisualStyleBackColor = true;
@@ -586,10 +594,10 @@
             this.lvCurPlaylistSongs.FullRowSelect = true;
             this.lvCurPlaylistSongs.HeaderStyle = System.Windows.Forms.ColumnHeaderStyle.Nonclickable;
             this.lvCurPlaylistSongs.HideSelection = false;
-            this.lvCurPlaylistSongs.Location = new System.Drawing.Point(591, 376);
+            this.lvCurPlaylistSongs.Location = new System.Drawing.Point(585, 412);
             this.lvCurPlaylistSongs.MultiSelect = false;
             this.lvCurPlaylistSongs.Name = "lvCurPlaylistSongs";
-            this.lvCurPlaylistSongs.Size = new System.Drawing.Size(346, 202);
+            this.lvCurPlaylistSongs.Size = new System.Drawing.Size(342, 238);
             this.lvCurPlaylistSongs.TabIndex = 4;
             this.lvCurPlaylistSongs.UseCompatibleStateImageBehavior = false;
             this.lvCurPlaylistSongs.View = System.Windows.Forms.View.Details;
@@ -599,9 +607,9 @@
             // btnDeletePlaylist
             // 
             this.btnDeletePlaylist.Dock = System.Windows.Forms.DockStyle.Fill;
-            this.btnDeletePlaylist.Location = new System.Drawing.Point(91, 584);
+            this.btnDeletePlaylist.Location = new System.Drawing.Point(90, 656);
             this.btnDeletePlaylist.Name = "btnDeletePlaylist";
-            this.btnDeletePlaylist.Size = new System.Drawing.Size(82, 24);
+            this.btnDeletePlaylist.Size = new System.Drawing.Size(81, 24);
             this.btnDeletePlaylist.TabIndex = 16;
             this.btnDeletePlaylist.Text = "Delete";
             this.btnDeletePlaylist.UseVisualStyleBackColor = true;
@@ -610,9 +618,9 @@
             // btnNewPlaylist
             // 
             this.btnNewPlaylist.Dock = System.Windows.Forms.DockStyle.Fill;
-            this.btnNewPlaylist.Location = new System.Drawing.Point(3, 584);
+            this.btnNewPlaylist.Location = new System.Drawing.Point(3, 656);
             this.btnNewPlaylist.Name = "btnNewPlaylist";
-            this.btnNewPlaylist.Size = new System.Drawing.Size(82, 24);
+            this.btnNewPlaylist.Size = new System.Drawing.Size(81, 24);
             this.btnNewPlaylist.TabIndex = 15;
             this.btnNewPlaylist.Text = "New";
             this.btnNewPlaylist.UseVisualStyleBackColor = true;
@@ -626,16 +634,16 @@
             this.lblPlaylistSelection.Font = new System.Drawing.Font("Microsoft Sans Serif", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
             this.lblPlaylistSelection.Location = new System.Drawing.Point(3, 10);
             this.lblPlaylistSelection.Name = "lblPlaylistSelection";
-            this.lblPlaylistSelection.Size = new System.Drawing.Size(170, 20);
+            this.lblPlaylistSelection.Size = new System.Drawing.Size(168, 20);
             this.lblPlaylistSelection.TabIndex = 24;
             this.lblPlaylistSelection.Text = "Playlist Selection";
             // 
             // btnAddToPlaylist
             // 
             this.btnAddToPlaylist.Dock = System.Windows.Forms.DockStyle.Fill;
-            this.btnAddToPlaylist.Location = new System.Drawing.Point(443, 584);
+            this.btnAddToPlaylist.Location = new System.Drawing.Point(438, 656);
             this.btnAddToPlaylist.Name = "btnAddToPlaylist";
-            this.btnAddToPlaylist.Size = new System.Drawing.Size(82, 24);
+            this.btnAddToPlaylist.Size = new System.Drawing.Size(81, 24);
             this.btnAddToPlaylist.TabIndex = 18;
             this.btnAddToPlaylist.Text = "Add -->";
             this.btnAddToPlaylist.UseVisualStyleBackColor = true;
@@ -644,9 +652,9 @@
             // txtStartPoint
             // 
             this.txtStartPoint.Dock = System.Windows.Forms.DockStyle.Fill;
-            this.txtStartPoint.Location = new System.Drawing.Point(767, 346);
+            this.txtStartPoint.Location = new System.Drawing.Point(759, 382);
             this.txtStartPoint.Name = "txtStartPoint";
-            this.txtStartPoint.Size = new System.Drawing.Size(82, 20);
+            this.txtStartPoint.Size = new System.Drawing.Size(81, 20);
             this.txtStartPoint.TabIndex = 30;
             this.txtStartPoint.Text = "0:00";
             // 
@@ -654,9 +662,9 @@
             // 
             this.lblStartPoint.Dock = System.Windows.Forms.DockStyle.Fill;
             this.lblStartPoint.Font = new System.Drawing.Font("Microsoft Sans Serif", 10F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
-            this.lblStartPoint.Location = new System.Drawing.Point(679, 343);
+            this.lblStartPoint.Location = new System.Drawing.Point(672, 379);
             this.lblStartPoint.Name = "lblStartPoint";
-            this.lblStartPoint.Size = new System.Drawing.Size(82, 30);
+            this.lblStartPoint.Size = new System.Drawing.Size(81, 30);
             this.lblStartPoint.TabIndex = 29;
             this.lblStartPoint.Text = "Start at:";
             this.lblStartPoint.TextAlign = System.Drawing.ContentAlignment.MiddleRight;
@@ -666,18 +674,26 @@
             this.volMeter.Amplitude = 0F;
             this.volMeter.Dock = System.Windows.Forms.DockStyle.Fill;
             this.volMeter.ForeColor = System.Drawing.Color.Lime;
-            this.volMeter.Location = new System.Drawing.Point(943, 33);
+            this.volMeter.Location = new System.Drawing.Point(933, 33);
             this.volMeter.MaxDb = 18F;
             this.volMeter.MinDb = -60F;
             this.volMeter.Name = "volMeter";
             this.tlpLists.SetRowSpan(this.volMeter, 8);
-            this.volMeter.Size = new System.Drawing.Size(10, 545);
+            this.volMeter.Size = new System.Drawing.Size(10, 617);
             this.volMeter.TabIndex = 31;
             // 
             // pnlFountain
             // 
             this.pnlFountain.Anchor = System.Windows.Forms.AnchorStyles.None;
             this.tlpLists.SetColumnSpan(this.pnlFountain, 15);
+            this.pnlFountain.Controls.Add(this.light53);
+            this.pnlFountain.Controls.Add(this.light52);
+            this.pnlFountain.Controls.Add(this.light51);
+            this.pnlFountain.Controls.Add(this.light50);
+            this.pnlFountain.Controls.Add(this.light49);
+            this.pnlFountain.Controls.Add(this.light48);
+            this.pnlFountain.Controls.Add(this.light47);
+            this.pnlFountain.Controls.Add(this.light46);
             this.pnlFountain.Controls.Add(this.light45);
             this.pnlFountain.Controls.Add(this.light44);
             this.pnlFountain.Controls.Add(this.light41);
@@ -724,16 +740,96 @@
             this.pnlFountain.Controls.Add(this.light5);
             this.pnlFountain.Controls.Add(this.light4);
             this.pnlFountain.Controls.Add(this.pbFountain);
-            this.pnlFountain.Location = new System.Drawing.Point(3, 644);
+            this.pnlFountain.Location = new System.Drawing.Point(3, 716);
             this.pnlFountain.Name = "pnlFountain";
-            this.pnlFountain.Size = new System.Drawing.Size(1002, 272);
+            this.pnlFountain.Size = new System.Drawing.Size(1000, 272);
             this.pnlFountain.TabIndex = 33;
+            // 
+            // light53
+            // 
+            this.light53.Anchor = System.Windows.Forms.AnchorStyles.None;
+            this.light53.LightNumber = 53;
+            this.light53.Location = new System.Drawing.Point(681, 107);
+            this.light53.Margin = new System.Windows.Forms.Padding(4, 5, 4, 5);
+            this.light53.Name = "light53";
+            this.light53.Size = new System.Drawing.Size(20, 20);
+            this.light53.TabIndex = 53;
+            // 
+            // light52
+            // 
+            this.light52.Anchor = System.Windows.Forms.AnchorStyles.None;
+            this.light52.LightNumber = 52;
+            this.light52.Location = new System.Drawing.Point(297, 107);
+            this.light52.Margin = new System.Windows.Forms.Padding(4, 5, 4, 5);
+            this.light52.Name = "light52";
+            this.light52.Size = new System.Drawing.Size(20, 20);
+            this.light52.TabIndex = 52;
+            // 
+            // light51
+            // 
+            this.light51.Anchor = System.Windows.Forms.AnchorStyles.None;
+            this.light51.LightNumber = 51;
+            this.light51.Location = new System.Drawing.Point(510, 72);
+            this.light51.Margin = new System.Windows.Forms.Padding(4, 5, 4, 5);
+            this.light51.Name = "light51";
+            this.light51.Size = new System.Drawing.Size(20, 20);
+            this.light51.TabIndex = 51;
+            // 
+            // light50
+            // 
+            this.light50.Anchor = System.Windows.Forms.AnchorStyles.None;
+            this.light50.LightNumber = 50;
+            this.light50.Location = new System.Drawing.Point(469, 72);
+            this.light50.Margin = new System.Windows.Forms.Padding(4, 5, 4, 5);
+            this.light50.Name = "light50";
+            this.light50.Size = new System.Drawing.Size(20, 20);
+            this.light50.TabIndex = 50;
+            // 
+            // light49
+            // 
+            this.light49.Anchor = System.Windows.Forms.AnchorStyles.None;
+            this.light49.LightNumber = 49;
+            this.light49.Location = new System.Drawing.Point(566, 3);
+            this.light49.Margin = new System.Windows.Forms.Padding(4, 5, 4, 5);
+            this.light49.Name = "light49";
+            this.light49.Size = new System.Drawing.Size(20, 20);
+            this.light49.TabIndex = 49;
+            // 
+            // light48
+            // 
+            this.light48.Anchor = System.Windows.Forms.AnchorStyles.None;
+            this.light48.LightNumber = 48;
+            this.light48.Location = new System.Drawing.Point(413, 3);
+            this.light48.Margin = new System.Windows.Forms.Padding(4, 5, 4, 5);
+            this.light48.Name = "light48";
+            this.light48.Size = new System.Drawing.Size(20, 20);
+            this.light48.TabIndex = 48;
+            // 
+            // light47
+            // 
+            this.light47.Anchor = System.Windows.Forms.AnchorStyles.None;
+            this.light47.LightNumber = 47;
+            this.light47.Location = new System.Drawing.Point(538, 14);
+            this.light47.Margin = new System.Windows.Forms.Padding(4, 5, 4, 5);
+            this.light47.Name = "light47";
+            this.light47.Size = new System.Drawing.Size(20, 20);
+            this.light47.TabIndex = 47;
+            // 
+            // light46
+            // 
+            this.light46.Anchor = System.Windows.Forms.AnchorStyles.None;
+            this.light46.LightNumber = 46;
+            this.light46.Location = new System.Drawing.Point(519, 14);
+            this.light46.Margin = new System.Windows.Forms.Padding(4, 5, 4, 5);
+            this.light46.Name = "light46";
+            this.light46.Size = new System.Drawing.Size(20, 20);
+            this.light46.TabIndex = 46;
             // 
             // light45
             // 
             this.light45.Anchor = System.Windows.Forms.AnchorStyles.None;
             this.light45.LightNumber = 45;
-            this.light45.Location = new System.Drawing.Point(683, 106);
+            this.light45.Location = new System.Drawing.Point(500, 14);
             this.light45.Margin = new System.Windows.Forms.Padding(4, 5, 4, 5);
             this.light45.Name = "light45";
             this.light45.Size = new System.Drawing.Size(20, 20);
@@ -743,7 +839,7 @@
             // 
             this.light44.Anchor = System.Windows.Forms.AnchorStyles.None;
             this.light44.LightNumber = 44;
-            this.light44.Location = new System.Drawing.Point(298, 106);
+            this.light44.Location = new System.Drawing.Point(480, 14);
             this.light44.Margin = new System.Windows.Forms.Padding(4, 5, 4, 5);
             this.light44.Name = "light44";
             this.light44.Size = new System.Drawing.Size(20, 20);
@@ -753,7 +849,7 @@
             // 
             this.light41.Anchor = System.Windows.Forms.AnchorStyles.None;
             this.light41.LightNumber = 41;
-            this.light41.Location = new System.Drawing.Point(538, 12);
+            this.light41.Location = new System.Drawing.Point(921, 42);
             this.light41.Margin = new System.Windows.Forms.Padding(4, 5, 4, 5);
             this.light41.Name = "light41";
             this.light41.Size = new System.Drawing.Size(20, 20);
@@ -763,7 +859,7 @@
             // 
             this.light40.Anchor = System.Windows.Forms.AnchorStyles.None;
             this.light40.LightNumber = 40;
-            this.light40.Location = new System.Drawing.Point(519, 12);
+            this.light40.Location = new System.Drawing.Point(874, 42);
             this.light40.Margin = new System.Windows.Forms.Padding(4, 5, 4, 5);
             this.light40.Name = "light40";
             this.light40.Size = new System.Drawing.Size(20, 20);
@@ -773,7 +869,7 @@
             // 
             this.light39.Anchor = System.Windows.Forms.AnchorStyles.None;
             this.light39.LightNumber = 39;
-            this.light39.Location = new System.Drawing.Point(500, 12);
+            this.light39.Location = new System.Drawing.Point(826, 42);
             this.light39.Margin = new System.Windows.Forms.Padding(4, 5, 4, 5);
             this.light39.Name = "light39";
             this.light39.Size = new System.Drawing.Size(20, 20);
@@ -783,7 +879,7 @@
             // 
             this.light38.Anchor = System.Windows.Forms.AnchorStyles.None;
             this.light38.LightNumber = 38;
-            this.light38.Location = new System.Drawing.Point(481, 12);
+            this.light38.Location = new System.Drawing.Point(874, 130);
             this.light38.Margin = new System.Windows.Forms.Padding(4, 5, 4, 5);
             this.light38.Name = "light38";
             this.light38.Size = new System.Drawing.Size(20, 20);
@@ -793,7 +889,7 @@
             // 
             this.light37.Anchor = System.Windows.Forms.AnchorStyles.None;
             this.light37.LightNumber = 37;
-            this.light37.Location = new System.Drawing.Point(462, 12);
+            this.light37.Location = new System.Drawing.Point(921, 218);
             this.light37.Margin = new System.Windows.Forms.Padding(4, 5, 4, 5);
             this.light37.Name = "light37";
             this.light37.Size = new System.Drawing.Size(20, 20);
@@ -803,7 +899,7 @@
             // 
             this.light36.Anchor = System.Windows.Forms.AnchorStyles.None;
             this.light36.LightNumber = 36;
-            this.light36.Location = new System.Drawing.Point(443, 12);
+            this.light36.Location = new System.Drawing.Point(826, 218);
             this.light36.Margin = new System.Windows.Forms.Padding(4, 5, 4, 5);
             this.light36.Name = "light36";
             this.light36.Size = new System.Drawing.Size(20, 20);
@@ -813,7 +909,7 @@
             // 
             this.light43.Anchor = System.Windows.Forms.AnchorStyles.None;
             this.light43.LightNumber = 43;
-            this.light43.Location = new System.Drawing.Point(514, 73);
+            this.light43.Location = new System.Drawing.Point(460, 14);
             this.light43.Margin = new System.Windows.Forms.Padding(4, 5, 4, 5);
             this.light43.Name = "light43";
             this.light43.Size = new System.Drawing.Size(20, 20);
@@ -823,7 +919,7 @@
             // 
             this.light42.Anchor = System.Windows.Forms.AnchorStyles.None;
             this.light42.LightNumber = 42;
-            this.light42.Location = new System.Drawing.Point(467, 73);
+            this.light42.Location = new System.Drawing.Point(441, 14);
             this.light42.Margin = new System.Windows.Forms.Padding(4, 5, 4, 5);
             this.light42.Name = "light42";
             this.light42.Size = new System.Drawing.Size(20, 20);
@@ -833,7 +929,7 @@
             // 
             this.light33.Anchor = System.Windows.Forms.AnchorStyles.None;
             this.light33.LightNumber = 33;
-            this.light33.Location = new System.Drawing.Point(889, 129);
+            this.light33.Location = new System.Drawing.Point(697, 42);
             this.light33.Margin = new System.Windows.Forms.Padding(4, 5, 4, 5);
             this.light33.Name = "light33";
             this.light33.Size = new System.Drawing.Size(20, 20);
@@ -843,7 +939,7 @@
             // 
             this.light28.Anchor = System.Windows.Forms.AnchorStyles.None;
             this.light28.LightNumber = 28;
-            this.light28.Location = new System.Drawing.Point(761, 129);
+            this.light28.Location = new System.Drawing.Point(617, 42);
             this.light28.Margin = new System.Windows.Forms.Padding(4, 5, 4, 5);
             this.light28.Name = "light28";
             this.light28.Size = new System.Drawing.Size(20, 20);
@@ -853,7 +949,7 @@
             // 
             this.light23.Anchor = System.Windows.Forms.AnchorStyles.None;
             this.light23.LightNumber = 23;
-            this.light23.Location = new System.Drawing.Point(632, 129);
+            this.light23.Location = new System.Drawing.Point(538, 42);
             this.light23.Margin = new System.Windows.Forms.Padding(4, 5, 4, 5);
             this.light23.Name = "light23";
             this.light23.Size = new System.Drawing.Size(20, 20);
@@ -863,7 +959,7 @@
             // 
             this.light18.Anchor = System.Windows.Forms.AnchorStyles.None;
             this.light18.LightNumber = 18;
-            this.light18.Location = new System.Drawing.Point(504, 129);
+            this.light18.Location = new System.Drawing.Point(409, 42);
             this.light18.Margin = new System.Windows.Forms.Padding(4, 5, 4, 5);
             this.light18.Name = "light18";
             this.light18.Size = new System.Drawing.Size(20, 20);
@@ -873,7 +969,7 @@
             // 
             this.light13.Anchor = System.Windows.Forms.AnchorStyles.None;
             this.light13.LightNumber = 13;
-            this.light13.Location = new System.Drawing.Point(376, 129);
+            this.light13.Location = new System.Drawing.Point(314, 218);
             this.light13.Margin = new System.Windows.Forms.Padding(4, 5, 4, 5);
             this.light13.Name = "light13";
             this.light13.Size = new System.Drawing.Size(20, 20);
@@ -883,7 +979,7 @@
             // 
             this.light8.Anchor = System.Windows.Forms.AnchorStyles.None;
             this.light8.LightNumber = 8;
-            this.light8.Location = new System.Drawing.Point(248, 129);
+            this.light8.Location = new System.Drawing.Point(280, 218);
             this.light8.Margin = new System.Windows.Forms.Padding(4, 5, 4, 5);
             this.light8.Name = "light8";
             this.light8.Size = new System.Drawing.Size(20, 20);
@@ -893,7 +989,7 @@
             // 
             this.light3.Anchor = System.Windows.Forms.AnchorStyles.None;
             this.light3.LightNumber = 3;
-            this.light3.Location = new System.Drawing.Point(120, 129);
+            this.light3.Location = new System.Drawing.Point(105, 130);
             this.light3.Margin = new System.Windows.Forms.Padding(4, 5, 4, 5);
             this.light3.Name = "light3";
             this.light3.Size = new System.Drawing.Size(20, 20);
@@ -903,7 +999,7 @@
             // 
             this.light20.Anchor = System.Windows.Forms.AnchorStyles.None;
             this.light20.LightNumber = 20;
-            this.light20.Location = new System.Drawing.Point(540, 218);
+            this.light20.Location = new System.Drawing.Point(538, 218);
             this.light20.Margin = new System.Windows.Forms.Padding(4, 5, 4, 5);
             this.light20.Name = "light20";
             this.light20.Size = new System.Drawing.Size(20, 20);
@@ -913,7 +1009,7 @@
             // 
             this.light17.Anchor = System.Windows.Forms.AnchorStyles.None;
             this.light17.LightNumber = 17;
-            this.light17.Location = new System.Drawing.Point(514, 218);
+            this.light17.Location = new System.Drawing.Point(361, 42);
             this.light17.Margin = new System.Windows.Forms.Padding(4, 5, 4, 5);
             this.light17.Name = "light17";
             this.light17.Size = new System.Drawing.Size(20, 20);
@@ -923,7 +1019,7 @@
             // 
             this.light16.Anchor = System.Windows.Forms.AnchorStyles.None;
             this.light16.LightNumber = 16;
-            this.light16.Location = new System.Drawing.Point(466, 218);
+            this.light16.Location = new System.Drawing.Point(314, 42);
             this.light16.Margin = new System.Windows.Forms.Padding(4, 5, 4, 5);
             this.light16.Name = "light16";
             this.light16.Size = new System.Drawing.Size(20, 20);
@@ -933,7 +1029,7 @@
             // 
             this.light19.Anchor = System.Windows.Forms.AnchorStyles.None;
             this.light19.LightNumber = 19;
-            this.light19.Location = new System.Drawing.Point(442, 218);
+            this.light19.Location = new System.Drawing.Point(441, 218);
             this.light19.Margin = new System.Windows.Forms.Padding(4, 5, 4, 5);
             this.light19.Name = "light19";
             this.light19.Size = new System.Drawing.Size(20, 20);
@@ -943,7 +1039,7 @@
             // 
             this.light32.Anchor = System.Windows.Forms.AnchorStyles.None;
             this.light32.LightNumber = 32;
-            this.light32.Location = new System.Drawing.Point(900, 218);
+            this.light32.Location = new System.Drawing.Point(746, 130);
             this.light32.Margin = new System.Windows.Forms.Padding(4, 5, 4, 5);
             this.light32.Name = "light32";
             this.light32.Size = new System.Drawing.Size(20, 20);
@@ -953,7 +1049,7 @@
             // 
             this.light27.Anchor = System.Windows.Forms.AnchorStyles.None;
             this.light27.LightNumber = 27;
-            this.light27.Location = new System.Drawing.Point(771, 218);
+            this.light27.Location = new System.Drawing.Point(570, 42);
             this.light27.Margin = new System.Windows.Forms.Padding(4, 5, 4, 5);
             this.light27.Name = "light27";
             this.light27.Size = new System.Drawing.Size(20, 20);
@@ -963,7 +1059,7 @@
             // 
             this.light31.Anchor = System.Windows.Forms.AnchorStyles.None;
             this.light31.LightNumber = 31;
-            this.light31.Location = new System.Drawing.Point(852, 218);
+            this.light31.Location = new System.Drawing.Point(794, 218);
             this.light31.Margin = new System.Windows.Forms.Padding(4, 5, 4, 5);
             this.light31.Name = "light31";
             this.light31.Size = new System.Drawing.Size(20, 20);
@@ -973,7 +1069,7 @@
             // 
             this.light22.Anchor = System.Windows.Forms.AnchorStyles.None;
             this.light22.LightNumber = 22;
-            this.light22.Location = new System.Drawing.Point(643, 218);
+            this.light22.Location = new System.Drawing.Point(441, 44);
             this.light22.Margin = new System.Windows.Forms.Padding(4, 5, 4, 5);
             this.light22.Name = "light22";
             this.light22.Size = new System.Drawing.Size(20, 20);
@@ -983,7 +1079,7 @@
             // 
             this.light26.Anchor = System.Windows.Forms.AnchorStyles.None;
             this.light26.LightNumber = 26;
-            this.light26.Location = new System.Drawing.Point(724, 218);
+            this.light26.Location = new System.Drawing.Point(617, 130);
             this.light26.Margin = new System.Windows.Forms.Padding(4, 5, 4, 5);
             this.light26.Name = "light26";
             this.light26.Size = new System.Drawing.Size(20, 20);
@@ -993,7 +1089,7 @@
             // 
             this.light12.Anchor = System.Windows.Forms.AnchorStyles.None;
             this.light12.LightNumber = 12;
-            this.light12.Location = new System.Drawing.Point(388, 218);
+            this.light12.Location = new System.Drawing.Point(280, 42);
             this.light12.Margin = new System.Windows.Forms.Padding(4, 5, 4, 5);
             this.light12.Name = "light12";
             this.light12.Size = new System.Drawing.Size(20, 20);
@@ -1003,7 +1099,7 @@
             // 
             this.light21.Anchor = System.Windows.Forms.AnchorStyles.None;
             this.light21.LightNumber = 21;
-            this.light21.Location = new System.Drawing.Point(595, 218);
+            this.light21.Location = new System.Drawing.Point(489, 130);
             this.light21.Margin = new System.Windows.Forms.Padding(4, 5, 4, 5);
             this.light21.Name = "light21";
             this.light21.Size = new System.Drawing.Size(20, 20);
@@ -1013,7 +1109,7 @@
             // 
             this.light7.Anchor = System.Windows.Forms.AnchorStyles.None;
             this.light7.LightNumber = 7;
-            this.light7.Location = new System.Drawing.Point(258, 218);
+            this.light7.Location = new System.Drawing.Point(185, 218);
             this.light7.Margin = new System.Windows.Forms.Padding(4, 5, 4, 5);
             this.light7.Name = "light7";
             this.light7.Size = new System.Drawing.Size(20, 20);
@@ -1023,7 +1119,7 @@
             // 
             this.light11.Anchor = System.Windows.Forms.AnchorStyles.None;
             this.light11.LightNumber = 11;
-            this.light11.Location = new System.Drawing.Point(338, 218);
+            this.light11.Location = new System.Drawing.Point(235, 42);
             this.light11.Margin = new System.Windows.Forms.Padding(4, 5, 4, 5);
             this.light11.Name = "light11";
             this.light11.Size = new System.Drawing.Size(20, 20);
@@ -1033,7 +1129,7 @@
             // 
             this.light2.Anchor = System.Windows.Forms.AnchorStyles.None;
             this.light2.LightNumber = 2;
-            this.light2.Location = new System.Drawing.Point(130, 218);
+            this.light2.Location = new System.Drawing.Point(153, 218);
             this.light2.Margin = new System.Windows.Forms.Padding(4, 5, 4, 5);
             this.light2.Name = "light2";
             this.light2.Size = new System.Drawing.Size(20, 20);
@@ -1043,7 +1139,7 @@
             // 
             this.light6.Anchor = System.Windows.Forms.AnchorStyles.None;
             this.light6.LightNumber = 6;
-            this.light6.Location = new System.Drawing.Point(211, 218);
+            this.light6.Location = new System.Drawing.Point(153, 42);
             this.light6.Margin = new System.Windows.Forms.Padding(4, 5, 4, 5);
             this.light6.Name = "light6";
             this.light6.Size = new System.Drawing.Size(20, 20);
@@ -1053,7 +1149,7 @@
             // 
             this.light1.Anchor = System.Windows.Forms.AnchorStyles.None;
             this.light1.LightNumber = 1;
-            this.light1.Location = new System.Drawing.Point(80, 218);
+            this.light1.Location = new System.Drawing.Point(58, 218);
             this.light1.Margin = new System.Windows.Forms.Padding(4, 5, 4, 5);
             this.light1.Name = "light1";
             this.light1.Size = new System.Drawing.Size(20, 20);
@@ -1063,7 +1159,7 @@
             // 
             this.light35.Anchor = System.Windows.Forms.AnchorStyles.None;
             this.light35.LightNumber = 35;
-            this.light35.Location = new System.Drawing.Point(925, 41);
+            this.light35.Location = new System.Drawing.Point(794, 42);
             this.light35.Margin = new System.Windows.Forms.Padding(4, 5, 4, 5);
             this.light35.Name = "light35";
             this.light35.Size = new System.Drawing.Size(20, 20);
@@ -1073,7 +1169,7 @@
             // 
             this.light30.Anchor = System.Windows.Forms.AnchorStyles.None;
             this.light30.LightNumber = 30;
-            this.light30.Location = new System.Drawing.Point(795, 41);
+            this.light30.Location = new System.Drawing.Point(697, 218);
             this.light30.Margin = new System.Windows.Forms.Padding(4, 5, 4, 5);
             this.light30.Name = "light30";
             this.light30.Size = new System.Drawing.Size(20, 20);
@@ -1083,7 +1179,7 @@
             // 
             this.light34.Anchor = System.Windows.Forms.AnchorStyles.None;
             this.light34.LightNumber = 34;
-            this.light34.Location = new System.Drawing.Point(829, 41);
+            this.light34.Location = new System.Drawing.Point(746, 42);
             this.light34.Margin = new System.Windows.Forms.Padding(4, 5, 4, 5);
             this.light34.Name = "light34";
             this.light34.Size = new System.Drawing.Size(20, 20);
@@ -1093,7 +1189,7 @@
             // 
             this.light25.Anchor = System.Windows.Forms.AnchorStyles.None;
             this.light25.LightNumber = 25;
-            this.light25.Location = new System.Drawing.Point(668, 41);
+            this.light25.Location = new System.Drawing.Point(665, 218);
             this.light25.Margin = new System.Windows.Forms.Padding(4, 5, 4, 5);
             this.light25.Name = "light25";
             this.light25.Size = new System.Drawing.Size(20, 20);
@@ -1103,7 +1199,7 @@
             // 
             this.light29.Anchor = System.Windows.Forms.AnchorStyles.None;
             this.light29.LightNumber = 29;
-            this.light29.Location = new System.Drawing.Point(699, 41);
+            this.light29.Location = new System.Drawing.Point(665, 42);
             this.light29.Margin = new System.Windows.Forms.Padding(4, 5, 4, 5);
             this.light29.Name = "light29";
             this.light29.Size = new System.Drawing.Size(20, 20);
@@ -1113,7 +1209,7 @@
             // 
             this.light15.Anchor = System.Windows.Forms.AnchorStyles.None;
             this.light15.LightNumber = 15;
-            this.light15.Location = new System.Drawing.Point(411, 41);
+            this.light15.Location = new System.Drawing.Point(361, 130);
             this.light15.Margin = new System.Windows.Forms.Padding(4, 5, 4, 5);
             this.light15.Name = "light15";
             this.light15.Size = new System.Drawing.Size(20, 20);
@@ -1123,7 +1219,7 @@
             // 
             this.light24.Anchor = System.Windows.Forms.AnchorStyles.None;
             this.light24.LightNumber = 24;
-            this.light24.Location = new System.Drawing.Point(572, 41);
+            this.light24.Location = new System.Drawing.Point(570, 218);
             this.light24.Margin = new System.Windows.Forms.Padding(4, 5, 4, 5);
             this.light24.Name = "light24";
             this.light24.Size = new System.Drawing.Size(20, 20);
@@ -1133,7 +1229,7 @@
             // 
             this.light10.Anchor = System.Windows.Forms.AnchorStyles.None;
             this.light10.LightNumber = 10;
-            this.light10.Location = new System.Drawing.Point(282, 41);
+            this.light10.Location = new System.Drawing.Point(185, 42);
             this.light10.Margin = new System.Windows.Forms.Padding(4, 5, 4, 5);
             this.light10.Name = "light10";
             this.light10.Size = new System.Drawing.Size(20, 20);
@@ -1143,7 +1239,7 @@
             // 
             this.light14.Anchor = System.Windows.Forms.AnchorStyles.None;
             this.light14.LightNumber = 14;
-            this.light14.Location = new System.Drawing.Point(315, 41);
+            this.light14.Location = new System.Drawing.Point(409, 218);
             this.light14.Margin = new System.Windows.Forms.Padding(4, 5, 4, 5);
             this.light14.Name = "light14";
             this.light14.Size = new System.Drawing.Size(20, 20);
@@ -1153,7 +1249,7 @@
             // 
             this.light9.Anchor = System.Windows.Forms.AnchorStyles.None;
             this.light9.LightNumber = 9;
-            this.light9.Location = new System.Drawing.Point(186, 41);
+            this.light9.Location = new System.Drawing.Point(235, 130);
             this.light9.Margin = new System.Windows.Forms.Padding(4, 5, 4, 5);
             this.light9.Name = "light9";
             this.light9.Size = new System.Drawing.Size(20, 20);
@@ -1163,7 +1259,7 @@
             // 
             this.light5.Anchor = System.Windows.Forms.AnchorStyles.None;
             this.light5.LightNumber = 5;
-            this.light5.Location = new System.Drawing.Point(154, 41);
+            this.light5.Location = new System.Drawing.Point(105, 42);
             this.light5.Margin = new System.Windows.Forms.Padding(4, 5, 4, 5);
             this.light5.Name = "light5";
             this.light5.Size = new System.Drawing.Size(20, 20);
@@ -1173,7 +1269,7 @@
             // 
             this.light4.Anchor = System.Windows.Forms.AnchorStyles.None;
             this.light4.LightNumber = 4;
-            this.light4.Location = new System.Drawing.Point(57, 41);
+            this.light4.Location = new System.Drawing.Point(58, 42);
             this.light4.Margin = new System.Windows.Forms.Padding(4, 5, 4, 5);
             this.light4.Name = "light4";
             this.light4.Size = new System.Drawing.Size(20, 20);
@@ -1187,8 +1283,8 @@
             this.pbFountain.Image = ((System.Drawing.Image)(resources.GetObject("pbFountain.Image")));
             this.pbFountain.Location = new System.Drawing.Point(0, 3);
             this.pbFountain.Name = "pbFountain";
-            this.pbFountain.Size = new System.Drawing.Size(1002, 269);
-            this.pbFountain.SizeMode = System.Windows.Forms.PictureBoxSizeMode.Zoom;
+            this.pbFountain.Size = new System.Drawing.Size(1000, 269);
+            this.pbFountain.SizeMode = System.Windows.Forms.PictureBoxSizeMode.StretchImage;
             this.pbFountain.TabIndex = 32;
             this.pbFountain.TabStop = false;
             // 
@@ -1197,9 +1293,9 @@
             this.tlpLists.SetColumnSpan(this.lblShowProgress, 4);
             this.lblShowProgress.Dock = System.Windows.Forms.DockStyle.Fill;
             this.lblShowProgress.Font = new System.Drawing.Font("Microsoft Sans Serif", 10F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
-            this.lblShowProgress.Location = new System.Drawing.Point(591, 323);
+            this.lblShowProgress.Location = new System.Drawing.Point(585, 359);
             this.lblShowProgress.Name = "lblShowProgress";
-            this.lblShowProgress.Size = new System.Drawing.Size(346, 20);
+            this.lblShowProgress.Size = new System.Drawing.Size(342, 20);
             this.lblShowProgress.TabIndex = 2;
             this.lblShowProgress.Text = "Show Now : Show Total";
             this.lblShowProgress.TextAlign = System.Drawing.ContentAlignment.TopCenter;
@@ -1213,10 +1309,10 @@
             this.lvAnnouncements.Font = new System.Drawing.Font("Microsoft Sans Serif", 10F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
             this.lvAnnouncements.HeaderStyle = System.Windows.Forms.ColumnHeaderStyle.None;
             this.lvAnnouncements.HideSelection = false;
-            this.lvAnnouncements.Location = new System.Drawing.Point(591, 58);
+            this.lvAnnouncements.Location = new System.Drawing.Point(585, 58);
             this.lvAnnouncements.MultiSelect = false;
             this.lvAnnouncements.Name = "lvAnnouncements";
-            this.lvAnnouncements.Size = new System.Drawing.Size(346, 202);
+            this.lvAnnouncements.Size = new System.Drawing.Size(342, 238);
             this.lvAnnouncements.TabIndex = 3;
             this.lvAnnouncements.UseCompatibleStateImageBehavior = false;
             this.lvAnnouncements.View = System.Windows.Forms.View.Details;
@@ -1238,7 +1334,8 @@
             // 
             this.AutoScaleDimensions = new System.Drawing.SizeF(6F, 13F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
-            this.ClientSize = new System.Drawing.Size(1008, 961);
+            this.BackColor = System.Drawing.Color.Azure;
+            this.ClientSize = new System.Drawing.Size(1006, 1032);
             this.Controls.Add(this.tlpLists);
             this.Icon = ((System.Drawing.Icon)(resources.GetObject("$this.Icon")));
             this.KeyPreview = true;
@@ -1350,6 +1447,14 @@
         private System.Windows.Forms.Label lblWaterFCWCount;
         private System.Windows.Forms.Label lblLightFCWs;
         private System.Windows.Forms.Label lblWaterFCWs;
+        private LightControl light53;
+        private LightControl light52;
+        private LightControl light51;
+        private LightControl light50;
+        private LightControl light49;
+        private LightControl light48;
+        private LightControl light47;
+        private LightControl light46;
     }
 }
 

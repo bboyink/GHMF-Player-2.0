@@ -71,6 +71,7 @@ namespace Playback
 
         public void SetColor(double intensity, LEDColor color, bool lockColor = false)
         {
+            if (color == null) return;
             // If this is a back curtain color set, then I can only change it from now on with a different back curtain color set
             if (lockColor)
                 Locked = lockColor;

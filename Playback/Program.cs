@@ -1,4 +1,6 @@
-﻿using System;
+﻿using NAudio.Wave;
+using System;
+using System.IO;
 using System.Runtime.InteropServices;
 using System.Windows.Forms;
 
@@ -20,7 +22,7 @@ namespace Playback
         static void Main()
         {
             bool createdNew = true;
-            using (System.Threading.Mutex mutex = new System.Threading.Mutex(true, "ApexPlayback", out createdNew))
+            using (System.Threading.Mutex mutex = new System.Threading.Mutex(true, "GHMFPlayback", out createdNew))
             {
                 if (createdNew)
                 {

@@ -5,8 +5,12 @@ namespace Playback
 {
     public static class Settings
     {
-        private static readonly string fileLocation = Path.Combine(System.Environment.GetFolderPath(System.Environment.SpecialFolder.CommonDocuments), "PlaybackSettings.xml");
-
+        //private static readonly string fileLocation = Path.Combine(System.Environment.GetFolderPath(System.Environment.SpecialFolder.CommonDocuments), "PlaybackSettings.xml");
+#if TEST
+        private static readonly string fileLocation = "C:\\GHMF\\Config\\Playback.xml";
+#else
+        private static readonly string fileLocation = System.IO.Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location) + "\\Config\\Playback.xml";
+#endif
         public static SettingsHolder CurrentSettings;
 
         static Settings()
