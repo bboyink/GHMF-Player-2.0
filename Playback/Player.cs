@@ -1,8 +1,9 @@
-﻿using System;
-using System.IO;
-using System.Linq;
+﻿using NAudio.CoreAudioApi;
 using NAudio.Wave;
 using NAudio.Wave.SampleProviders;
+using System;
+using System.IO;
+using System.Linq;
 
 namespace Playback
 {
@@ -238,7 +239,8 @@ namespace Playback
             int samplesPerUpdate = sampleChannel.WaveFormat.SampleRate / outputUpdatesPerSecond;
             meteringSampleProvider = new NAudio.Wave.SampleProviders.MeteringSampleProvider(sampleChannel, samplesPerUpdate);
             meteringSampleProvider.StreamVolume += MeteringSampleProvider_StreamVolume;
-            audioOutput = new WasapiOut(device, NAudio.CoreAudioApi.AudioClientShareMode.Exclusive, false, (int)latency.TotalMilliseconds); // a latency of 320 seems to work for event mode but I'm not going to worry about that
+            //audioOutput = new WasapiOut(device, NAudio.CoreAudioApi.AudioClientShareMode.Exclusive, false, (int)latency.TotalMilliseconds); // a latency of 320 seems to work for event mode but I'm not going to worry about that
+            audioOutput = new WasapiOut(device, AudioClientShareMode.Shared, false, (int)latency.TotalMilliseconds); // a latency of 320 seems to work for event mode but I'm not going to worry about that
             audioOutput.Init(meteringSampleProvider);
             audioOutput.Play();
             device.AudioEndpointVolume.Mute = false;
