@@ -6,11 +6,10 @@ namespace Playback
     public static class Settings
     {
         //private static readonly string fileLocation = Path.Combine(System.Environment.GetFolderPath(System.Environment.SpecialFolder.CommonDocuments), "PlaybackSettings.xml");
-#if TEST
-        private static readonly string fileLocation = "C:\\GHMF\\Config\\Playback.xml";
-#else
-        private static readonly string fileLocation = System.IO.Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location) + "\\Config\\Playback.xml";
-#endif
+
+        // when debugging in Visual Studio, use c:\ghmf\config as the path for the settings file; otherwise, use a config subfolder within the app's folder
+        // keeping settings with the app ensures they get moved with the software
+        private static readonly string fileLocation = (!System.Diagnostics.Debugger.IsAttached ? System.IO.Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location) : "c:\\GHMF") + "\\config\\Playback.xml";
         public static SettingsHolder CurrentSettings;
 
         static Settings()

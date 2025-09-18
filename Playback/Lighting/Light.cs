@@ -30,6 +30,7 @@ namespace Playback
             set { firmlyLocked = value; RegenColor(); }
         }
         public bool HasRaw { get; private set; }
+        public bool IsSpecialDMX { get; private set; }
         public LEDColor Color { get; private set; }
 
         public Light(LightConfig config)
@@ -54,6 +55,7 @@ namespace Playback
             }
 
             HasRaw = unlockedChannels.Any(ch => ch.Type == ChannelType.Raw);
+            IsSpecialDMX = unlockedChannels.Any(ch => ch.Type == ChannelType.DMX);
 
             unlockedIntensity = new FadeableValue<double>(1, 0, 1, CalculateIntensityFade);
             lockedIntensity = new FadeableValue<double>(1, 0, 1, CalculateIntensityFade);

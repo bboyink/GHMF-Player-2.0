@@ -12,7 +12,8 @@ namespace Playback
         Blue,
         Amber,
         White,
-        Raw
+        Raw,
+        DMX
     }
 
     public class Lighting : System.IDisposable
@@ -208,6 +209,18 @@ namespace Playback
             else
                 Logger.LogWarning("No light found at light index {0}", lightIndex);
         }
+        public void SetSpecialDMXValue(int lightIndex, byte value)
+        {
+            if (lights.Length > lightIndex && lights[lightIndex] != null)
+            {
+                // for special DMX controls, send to the first channel only
+                OpenDMX.setDmxValue(lights[lightIndex].Channels[0].Index, value);
+                if (DMXConnected && OpenDMX.status != FT_STATUS.FT_OK)
+                    DisconnectDMX();
+            }
+            else
+                Logger.LogWarning("No DMX found at index {0}", lightIndex);
+        }
 
         public void FadeLight(int lightIndex, LEDColor targetColor, double targetIntensity, bool lockColor, int fadeTimeMilliseconds)
         {
@@ -226,6 +239,9 @@ namespace Playback
 
         private void UpdateMessage(int lightIndex)
         {
+            // don't risk clearing a special DMX channel
+            if (lights[lightIndex].IsSpecialDMX) return;
+
             foreach (Channel channel in lights[lightIndex].Channels)
             {
                 int[] channelIndices = new[] { channel.Index };

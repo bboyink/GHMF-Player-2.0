@@ -14,10 +14,7 @@ namespace Playback
             new FCW(80, FCWType.Light | FCWType.Water | FCWType.Special, FCWLightRole.TurnOnOff), // Swap A and B lights
             new FCW(85, FCWType.Light | FCWType.Water | FCWType.Special, FCWLightRole.TurnOnOff), // Shift/rotate lights and water
             new FCW(86, FCWType.Light | FCWType.Water | FCWType.Special, FCWLightRole.None), // Set timer for 85
-            new FCW(99, FCWType.Light | FCWType.Water | FCWType.Special, FCWLightRole.TurnOnOff), // Maintenance stuff (mostly stop everything)
-            new FCW(900, FCWType.Light | FCWType.Special, FCWLightRole.None), // Madrix 1 DMX
-            new FCW(901, FCWType.Light | FCWType.Special, FCWLightRole.None), // Madrix 2 DMX
-            new FCW(902, FCWType.Light | FCWType.Special, FCWLightRole.None), // Fireworks DMX
+            new FCW(99, FCWType.Light | FCWType.Water | FCWType.Special, FCWLightRole.TurnOnOff) // Maintenance stuff (mostly stop everything)
         };
 
         private void CreateFCWArray(int numEntries)
@@ -115,6 +112,8 @@ namespace Playback
                                 {
                                     if (fields[i].ToUpper().Contains("F"))
                                         role = FCWLightRole.Fade;
+                                    else if (fields[i].ToUpper().Contains("D"))
+                                        role = FCWLightRole.SpecialDMX;
                                     else
                                         role = FCWLightRole.TurnOnOff;
                                 }

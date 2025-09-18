@@ -22,7 +22,9 @@
                 { 'A', ChannelType.Amber },
                 { 'a', ChannelType.Amber },
                 { 'W', ChannelType.White },
-                { 'w', ChannelType.White }
+                { 'w', ChannelType.White },
+                { 'D', ChannelType.DMX },
+                { 'd', ChannelType.DMX }
             };
         }
 

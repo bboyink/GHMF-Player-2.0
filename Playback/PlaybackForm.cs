@@ -1538,7 +1538,7 @@ namespace Playback
                         }
 
                         // An individual light command takes priority over anything else
-                        if (fcwToExecute.AffectedLights.Length == 1)
+                        if (fcwToExecute.AffectedLights.Length == 1 && fcwToExecute.Role != FCWLightRole.SpecialDMX)
                         {
                             lockedColor = true;
                         }
@@ -1563,6 +1563,9 @@ namespace Playback
                                         break;
                                     case FCWLightRole.Fade:
                                         LightController.FadeLight(light, newColor, intensity, lockedColor, command.Data * 100);
+                                        break;
+                                    case FCWLightRole.SpecialDMX:
+                                        LightController.SetSpecialDMXValue(light, (byte)command.Data);
                                         break;
                                     default:
                                         break;
@@ -1724,10 +1727,6 @@ namespace Playback
                             Logger.LogInfo("Will skip light reset after current song");
                             break;
                     }
-                    break;
-                case (int)SpecialFCWAddress.Madrix1:
-                case (int)SpecialFCWAddress.Madrix2:
-                case (int)SpecialFCWAddress.Fireworks:
                     break;
             }
         }
