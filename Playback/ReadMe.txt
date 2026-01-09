@@ -2,7 +2,7 @@
 What's New
 ==========
 
-Version 1.3.0.0		Added support for 8 new lights (46-53). Modules 1, 2, 3, 5, 6, and 7 each get a new back center light, and the peacock gets two back lights.
+Version 1.3.0.0		Added support for 8 new light fixtures (46-53). Modules 1, 2, 3, 5, 6, and 7 each get a new back center light, and the peacock gets two back lights.
 
 					During the reading of control scripts identified by "created with GHMF", previous light designations are remapped to their new locations.
 
@@ -21,13 +21,18 @@ Version 1.3.0.0		Added support for 8 new lights (46-53). Modules 1, 2, 3, 5, 6, 
 
 					Properly designated City of Grand Haven as owner of all code and updated copyright information accordingly.
 
+					Support for non-light DMX devices was added for fireworks and Madrix communications. The devices are treated independently from show playback,
+					meaning values are not affected by lighting or PCL commands.
+
+					In addition to their legacy settings, lighting commands now can be passed a 6-digit hex value for the desired RGB color.
+
 
 
 =============================
 Notes: 9-16-2025 - Jim Swarts
 =============================
 
-This is a legacy project that depends on .NET Framework 4.0. Try getting that for a newer machine! What an adventure! I had to install Visual Studio 2019 to get
+This is a legacy project that depends on .NET Framework 4.0. Try getting that SDK for a newer machine! What an adventure! I had to install Visual Studio 2019 to get
 the older frameworks, because Microsoft has pulled most of them, they do not come with VS 2022, and some are only handled as references (confusing).
 
 Advancing to a new framework breaks the project! For example, Framework 4.5.2 causes issues with configuring lights (DMX) to the point the code confused DMX and PLC
@@ -54,3 +59,15 @@ playing songs.
 
 FCWs 900-902 have been mapped to DMX devices 900-902, which, in order are Madrix 1, Madrix 2, and Fireworks. As of this writing, they are mapped to channels 500, 501,
 and 502. The existing raw functions were not condusive to sticky settings, which are required for the intended use.
+
+
+==============================
+Notes: 10-28-2025 - Jim Swarts
+==============================
+
+The new GHMF Animated Choreographer software outputs light colors as 6-digit hex values, so the playback now can process commands in the AAA-DDDDDD format, where AAA is a FCW for
+lights and DDDDDD is an RGB hex value for the desired color. This is an extension, not a replacement, for lighting control. You still can send 017-001 for red lights on Module 1,
+but you also can send 017-FF0000 for the same color. This change brings 16,777,215 colors to the fountain's color palette.
+
+Previous versions considered any non-numeric value within FCWs as separators. Now, the software expects addresses and data to be separated by hyphens, and it uses spaces to
+determine where FCWs begin and end. This restricter requirement enables the use of hex values and is in line with FCW documentation.

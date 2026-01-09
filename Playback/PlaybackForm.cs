@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Diagnostics.Eventing.Reader;
 using System.Drawing;
 using System.IO;
 using System.Linq;
@@ -1609,18 +1610,31 @@ namespace Playback
 
         private LEDColor GetColor(Command command, out double intensity, out bool lockedColor)
         {
-            intensity = command.Data / 100 / 10d;
-            // For the sake of backwards compatibility, an intensity of 0 is in fact full intensity
-            // If they want to turn it off, they just tell it color 0 (black)
-            if (intensity == 0)
-                intensity = 1;
-
-            int colorNumber = command.Data % 100;
-            lockedColor = false;
 
             LEDColor newColor = null;
-            if (colorNumber < Colors.Length)
-                newColor = Colors[colorNumber];
+            int colorNumber = 0;
+
+            if (command.ToString().Length == 6)
+            {
+                intensity = command.Data / 100 / 10d;
+                // For the sake of backwards compatibility, an intensity of 0 is in fact full intensity
+                // If they want to turn it off, they just tell it color 0 (black)
+                if (intensity == 0)
+                    intensity = 1;
+                colorNumber = command.Data % 100;
+                if (colorNumber < Colors.Length)
+                    newColor = Colors[colorNumber];
+            }
+            else
+            {
+                intensity = 1;
+                string rgb = command.Data.ToString("X6");
+                byte r = Convert.ToByte(rgb.Substring(0, 2),16);
+                byte g = Convert.ToByte(rgb.Substring(2, 2), 16);
+                byte b = Convert.ToByte(rgb.Substring(4, 2), 16);
+                newColor = new LEDColor(r,g,b);
+            }
+            lockedColor = false;
 
             // I'm not sure where to put this so I'm doing it here
             switch (command.Address)

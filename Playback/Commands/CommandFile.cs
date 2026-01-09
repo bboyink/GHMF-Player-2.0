@@ -55,15 +55,17 @@ namespace Playback
                         FCWs = line;
                         if (remap)
                         {
-                            for (int i=500; i<700; i+=100 ) // remap 500s and 600s
-                                for (int j=1; j<54; j++)
+                            for (int i = 500; i < 700; i += 100) // remap 500s and 600s
+                            {
+                                for (int j = 1; j < 54; j++)
                                 {
-                                    oldFCW = $"{(i+j).ToString()}-";
-                                    newFCW = $"{(i==500 ? "5X" : "6X")}{(fixtures[j-1]).ToString("D2")}-"; // use X to avoid recursive replacements
+                                    oldFCW = $"{(i + j).ToString()}-";
+                                    newFCW = $"{(i == 500 ? "5X" : "6X")}{(fixtures[j - 1]).ToString("D2")}-"; // use X to avoid recursive replacements
                                     FCWs = FCWs.Replace(oldFCW, newFCW);
                                 }
+                            }
+                            FCWs = FCWs.Replace("X", ""); // get rid of any Xs we inserted
                         }
-                        FCWs = FCWs.Replace("X", ""); // get rid of any Xs we inserted
                         commands.Add(new CommandLine(FCWs));
                     }
                     else

@@ -31,6 +31,7 @@
             // T: tenths-of-a-second timestamp
             // AAA: address of device (see FCW documentation)
             // DDD: data of device (see FCW documentation)
+            // DDDDDD: beginning with Animated Choreographer 3.0, DDD becomes DDDDDD for light colors
 
             // Addition (2015/02/20): ignore anything between parentheses
             unparsedLine = System.Text.RegularExpressions.Regex.Replace(unparsedLine, @" ?\(.*\) ?", " ").Trim();
@@ -55,10 +56,10 @@
                 return;
             }
 
-            // Now that that's out of the way, the rest of it is AAA-DDD, separated by spaces, so we'll split into groups first
+            // Now that that's out of the way, the rest of it is AAA-DDD or AAA-DDDDDD, separated by spaces, so we'll split into groups first
             // Now, for manual entries they might just do "AAA DDD" but we'll let them, if it's just one command
             string[] commandStrings;
-            if (commandsOnly.Length <= 7)
+            if (commandsOnly.Length <= 7 || commandsOnly.Length == 10)
                 commandStrings = commandsOnly.Split(commandSplitChars, 1);
             else
                 commandStrings = commandsOnly.Split(commandSplitChars, System.StringSplitOptions.RemoveEmptyEntries);

@@ -1,0 +1,19 @@
+{
+  "mappings": [
+    {
+      "fixture_id": 1,
+      "fixture_name": "Mod. 1 Front Left",
+      "start_channel": 1
+    },
+    {
+      "fixture_id": 2,
+      "fixture_name": "Mod. 1 Front Right",
+      "start_channel": 5
+    },
+    {
+      "fixture_id": 55,
+      "fixture_name": "Fireworks",
+      "start_channel": 500
+    }
+  ]
+}

@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<SettingsHolder xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+  <AudioEndpointID>{0.0.0.00000000}.{0be37517-f8cf-4e02-9b7d-c0fde026ff30}</AudioEndpointID>
+  <DefaultColorMap>C:\GHMF Player\Config\ColorMap.csv</DefaultColorMap>
+  <DMXMap>C:\GHMF Player\Config\DMXMap.csv</DMXMap>
+  <FCWMap>C:\GHMF Player\Config\FCWMap.CSV</FCWMap>
+  <PlaylistDirectory>C:\GHMF Player\Playlists</PlaylistDirectory>
+  <SongDirectory>C:\GHMF Player\Songs</SongDirectory>
+  <AnnouncementDirectory>C:\GHMF Player\Announcements</AnnouncementDirectory>
+  <PLCIPAddress>192.168.1.10</PLCIPAddress>
+  <PLCPort>444</PLCPort>
+  <ShowStartAt>false</ShowStartAt>
+  <PlaybackLatency>50</PlaybackLatency>
+  <UpdateRate>30</UpdateRate>
+  <LogLevel>Info</LogLevel>
+  <PlaybackPosition>
+    <X>296</X>
+    <Y>75</Y>
+  </PlaybackPosition>
+  <PlaybackSize>
+    <Width>1134</Width>
+    <Height>917</Height>
+  </PlaybackSize>
+  <CurrentPlaylistSongColumnWidth>196</CurrentPlaylistSongColumnWidth>
+  <CurrentPlaylistArtistColumnWidth>60</CurrentPlaylistArtistColumnWidth>
+  <LoopWarnMS>5</LoopWarnMS>
+  <RefreshWarnMS>5</RefreshWarnMS>
+</SettingsHolder>
