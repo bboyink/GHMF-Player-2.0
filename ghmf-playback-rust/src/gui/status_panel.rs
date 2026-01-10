@@ -11,7 +11,7 @@ pub enum StatusType {
     Error,
 }
 
-pub fn show(ui: &mut Ui, message: &str, status_type: StatusType, status_time: Instant, dmx_connected: bool, plc_status: &PlcStatus) {
+pub fn show(ui: &mut Ui, message: &str, status_type: StatusType, status_time: Instant, dmx_connected: bool, plc_status: &PlcStatus, use_rgbw: bool) {
     ui.horizontal(|ui| {
         // Status icon and message
         let (icon, color) = match status_type {
@@ -35,6 +35,9 @@ pub fn show(ui: &mut Ui, message: &str, status_type: StatusType, status_time: In
         ui.label(RichText::new("DMX:").color(theme::AppColors::TEXT_SECONDARY).size(11.0));
         ui.label(RichText::new(if dmx_connected { "Connected" } else { "Disconnected" })
             .color(dmx_color)
+            .size(11.0));
+        ui.label(RichText::new(format!("Mode: {}", if use_rgbw { "RGBW" } else { "RGB" }))
+            .color(theme::AppColors::TEXT_DISABLED)
             .size(11.0));
         
         ui.add_space(15.0);

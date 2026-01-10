@@ -7,6 +7,7 @@ use anyhow::Result;
 pub struct FixtureManager {
     config: CsvConfig,
     current_state: HashMap<u16, (u8, u8, u8, u8)>, // Fixture# -> (R, G, B, W)
+    use_rgbw: bool, // true = convert RGB to RGBW, false = RGB only with W=0
 }
 
 impl FixtureManager {
@@ -14,7 +15,33 @@ impl FixtureManager {
         Self {
             config,
             current_state: HashMap::new(),
+            use_rgbw: true, // Default to RGBW mode
         }
+    }
+    
+    /// Set whether to use RGBW mode (convert RGB to RGBW) or RGB mode (W=0)
+    pub fn set_rgbw_mode(&mut self, use_rgbw: bool) {
+        self.use_rgbw = use_rgbw;
+    }
+    
+    /// Convert RGB to RGBW using luminance extraction
+    /// Extracts the minimum RGB value as white channel for better color mixing
+    fn rgb_to_rgbw(&self, r: u8, g: u8, b: u8) -> (u8, u8, u8, u8) {
+        if !self.use_rgbw {
+            // RGB mode: just return RGB with W=0
+            return (r, g, b, 0);
+        }
+        
+        // RGBW mode: Extract white component
+        // Find the minimum value among R, G, B - this becomes the white channel
+        let w = r.min(g).min(b);
+        
+        // Subtract white from RGB channels
+        let r_new = r.saturating_sub(w);
+        let g_new = g.saturating_sub(w);
+        let b_new = b.saturating_sub(w);
+        
+        (r_new, g_new, b_new, w)
     }
     
     /// Execute an FCW command: "ADDRESS-DATA"
@@ -49,7 +76,8 @@ impl FixtureManager {
         for (fixture_num, directive) in operations {
             match directive {
                 FcwDirective::On => {
-                    self.set_fixture_color(fixture_num, r, g, b, 0)?;
+                    let (r_out, g_out, b_out, w_out) = self.rgb_to_rgbw(r, g, b);
+                    self.set_fixture_color(fixture_num, r_out, g_out, b_out, w_out)?;
                 }
                 FcwDirective::Fade => {
                     // TODO: Implement fade logic with timing
@@ -57,7 +85,8 @@ impl FixtureManager {
                 }
                 FcwDirective::GreenYellow => {
                     // Special mode - use green/yellow mix
-                    self.set_fixture_color(fixture_num, r / 2, g, 0, 0)?;
+                    let (r_out, g_out, b_out, w_out) = self.rgb_to_rgbw(r / 2, g, 0);
+                    self.set_fixture_color(fixture_num, r_out, g_out, b_out, w_out)?;
                 }
                 FcwDirective::Custom(name) if name == "WHT" => {
                     // White channel mode for RGBW fixtures
@@ -104,7 +133,8 @@ impl FixtureManager {
         for (fixture_num, directive) in operations {
             match directive {
                 FcwDirective::On => {
-                    self.set_fixture_color(fixture_num, r, g, b, 0)?;
+                    let (r_out, g_out, b_out, w_out) = self.rgb_to_rgbw(r, g, b);
+                    self.set_fixture_color(fixture_num, r_out, g_out, b_out, w_out)?;
                 }
                 FcwDirective::Fade => {
                     self.set_fixture_color(fixture_num, 0, 0, 0, 0)?;

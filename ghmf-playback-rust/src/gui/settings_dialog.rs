@@ -43,6 +43,18 @@ pub fn show(ctx: &Context, open: &mut bool, settings: &mut Settings) {
                     ui.label(RichText::new("DMX disabled - lighting controls will not function")
                         .color(theme::AppColors::WARNING));
                 }
+                
+                ui.add_space(10.0);
+                
+                ui.horizontal(|ui| {
+                    ui.label("Fixture Format:");
+                    ui.radio_value(&mut settings.use_rgbw, true, "RGBW (4 channels)");
+                    ui.radio_value(&mut settings.use_rgbw, false, "RGB (3 channels)");
+                });
+                
+                ui.label(RichText::new("RGBW: Converts RGB to RGBW | RGB: Sets W channel to 0")
+                    .size(11.0)
+                    .color(theme::AppColors::TEXT_DISABLED));
             });
             
             ui.add_space(15.0);

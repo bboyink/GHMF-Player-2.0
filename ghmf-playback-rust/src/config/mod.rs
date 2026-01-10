@@ -14,11 +14,17 @@ pub struct Settings {
     pub audio_device_id: Option<String>,
     pub audio_latency_ms: u32,
     pub dmx_enabled: bool,
+    #[serde(default = "default_use_rgbw")]
+    pub use_rgbw: bool,
     pub plc_enabled: bool,
     pub plc_ip_address: String,
     pub plc_port: u16,
     pub plc_port_name: Option<String>,
     pub last_playlist: Option<String>,
+}
+
+fn default_use_rgbw() -> bool {
+    true
 }
 
 impl Default for Settings {
@@ -27,6 +33,7 @@ impl Default for Settings {
             audio_device_id: None,
             audio_latency_ms: 100,
             dmx_enabled: true,
+            use_rgbw: true,
             plc_enabled: false,
             plc_ip_address: "192.168.1.10".to_string(),
             plc_port: 444,

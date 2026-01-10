@@ -100,7 +100,7 @@ impl CsvConfig {
     pub fn load_from_dir<P: AsRef<Path>>(dir: P) -> Result<Self> {
         let dir = dir.as_ref();
         
-        let colors = Self::load_color_map(dir.join("ColorMap.csv"))?;
+        let colors = Self::load_legacy_colors_json(dir.join("legacy_colors.json"))?;
         let fixtures = Self::load_dmx_map(dir.join("DMXMap.csv"))?;
         let fcw_mappings = Self::load_fcw_map(dir.join("FCWMap.CSV"))?;
         
@@ -111,37 +111,32 @@ impl CsvConfig {
         })
     }
     
-    /// Load ColorMap.csv
-    fn load_color_map<P: AsRef<Path>>(path: P) -> Result<HashMap<u16, ColorDefinition>> {
-        let file = File::open(path.as_ref())
-            .context(format!("Failed to open ColorMap.csv at {:?}", path.as_ref()))?;
+    /// Load legacy colors from JSON file
+    fn load_legacy_colors_json<P: AsRef<Path>>(path: P) -> Result<HashMap<u16, ColorDefinition>> {
+        let json_data = std::fs::read_to_string(path.as_ref())
+            .context(format!("Failed to read legacy_colors.json at {:?}", path.as_ref()))?;
         
-        let mut reader = ReaderBuilder::new()
-            .has_headers(true)
-            .from_reader(file);
+        #[derive(serde::Deserialize)]
+        struct LegacyColorJson {
+            index: u8,
+            name: String,
+            hex: String,
+        }
+        
+        let legacy_colors: Vec<LegacyColorJson> = serde_json::from_str(&json_data)
+            .context("Failed to parse legacy_colors.json")?;
         
         let mut colors = HashMap::new();
         
-        for result in reader.records() {
-            let record = result?;
-            
-            if record.len() < 3 {
-                continue;
-            }
-            
-            let index: u16 = record[0].trim().parse()
-                .context("Failed to parse color index")?;
-            let hex_color = record[1].trim().to_string();
-            let description = record[2].trim().to_string();
-            
-            colors.insert(index, ColorDefinition {
-                index,
-                hex_color,
-                description,
+        for color in legacy_colors {
+            colors.insert(color.index as u16, ColorDefinition {
+                index: color.index as u16,
+                hex_color: color.hex,
+                description: color.name,
             });
         }
         
-        tracing::info!("Loaded {} colors from ColorMap.csv", colors.len());
+        tracing::info!("Loaded {} legacy colors from legacy_colors.json", colors.len());
         Ok(colors)
     }
     

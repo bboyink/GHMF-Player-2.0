@@ -1,4 +1,4 @@
-use super::{playback_panel, lighting_panel, status_panel, settings_dialog, command_panel, theme, sidebar, dmx_map_panel, light_group_panel};
+use super::{playback_panel, lighting_panel, status_panel, settings_dialog, command_panel, theme, sidebar, dmx_map_panel, light_group_panel, legacy_color_panel};
 use crate::audio::AudioPlayer;
 use crate::dmx::{EnttecDmxPro, DmxUniverse};
 use crate::plc::{PlcClient, PlcStatus};
@@ -66,6 +66,9 @@ pub struct PlaybackApp {
     
     // Light Group Mapper
     light_group_panel: light_group_panel::LightGroupPanel,
+    
+    // Legacy Color Mapper
+    legacy_color_panel: legacy_color_panel::LegacyColorPanel,
 }
 
 
@@ -103,6 +106,7 @@ impl Default for PlaybackApp {
             recent_commands: Vec::new(),
             dmx_map_panel: dmx_map_panel::DmxMapPanel::new(),
             light_group_panel: light_group_panel::LightGroupPanel::new(),
+            legacy_color_panel: legacy_color_panel::LegacyColorPanel::default(),
         }
     }
 }
@@ -146,9 +150,12 @@ impl PlaybackApp {
                 let config_arc = Arc::new(config);
                 
                 // Create fixture manager
-                let fixture_manager = FixtureManager::new(
+                let mut fixture_manager = FixtureManager::new(
                     Arc::try_unwrap(config_arc.clone()).unwrap_or_else(|arc| (*arc).clone())
                 );
+                
+                // Set RGBW mode from settings
+                fixture_manager.set_rgbw_mode(self.settings.use_rgbw);
                 
                 self.fixture_manager = Some(Arc::new(Mutex::new(fixture_manager)));
                 self.csv_config = Some(config_arc);
@@ -757,6 +764,37 @@ impl PlaybackApp {
                             .size(13.0)
                             .color(theme::AppColors::TEXT_SECONDARY)
                     );
+                    
+                    ui.add_space(20.0);
+                    ui.label(
+                        egui::RichText::new("Fixture Mode:")
+                            .size(14.0)
+                            .color(Color32::WHITE)
+                    );
+                    ui.add_space(8.0);
+                    ui.horizontal(|ui| {
+                        ui.radio_value(&mut self.settings.use_rgbw, true, 
+                            egui::RichText::new("RGBW (4 channels)")
+                                .size(13.0)
+                                .color(Color32::WHITE)
+                        );
+                        ui.add_space(10.0);
+                        ui.radio_value(&mut self.settings.use_rgbw, false, 
+                            egui::RichText::new("RGB (3 channels)")
+                                .size(13.0)
+                                .color(Color32::WHITE)
+                        );
+                    });
+                    ui.add_space(6.0);
+                    ui.label(
+                        egui::RichText::new(if self.settings.use_rgbw {
+                            "Converts RGB to RGBW for better color mixing"
+                        } else {
+                            "RGB mode only, White channel set to 0"
+                        })
+                            .size(12.0)
+                            .color(theme::AppColors::TEXT_DISABLED)
+                    );
                 });
             
             ui.add_space(20.0);
@@ -800,7 +838,12 @@ impl PlaybackApp {
                             .color(Color32::WHITE)
                     );
                     ui.add_space(5.0);
-                    ui.add(egui::Slider::new(&mut self.settings.plc_port, 1..=65535));
+                    let mut port_str = self.settings.plc_port.to_string();
+                    if ui.text_edit_singleline(&mut port_str).changed() {
+                        if let Ok(port_num) = port_str.parse::<u16>() {
+                            self.settings.plc_port = port_num;
+                        }
+                    }
                     ui.add_space(8.0);
                     ui.label(
                         egui::RichText::new("Send water commands to PLC over TCP/IP")
@@ -827,6 +870,12 @@ impl PlaybackApp {
                         self.set_status(&format!("Failed to save settings: {}", e), StatusType::Warning);
                     } else {
                         self.set_status("Settings saved successfully", StatusType::Success);
+                        // Update fixture manager RGBW mode
+                        if let Some(fm) = &self.fixture_manager {
+                            if let Ok(mut fm) = fm.lock() {
+                                fm.set_rgbw_mode(self.settings.use_rgbw);
+                            }
+                        }
                         // Reinitialize systems with new settings
                         self.initialize_dmx();
                         self.initialize_plc();
@@ -875,7 +924,8 @@ impl eframe::App for PlaybackApp {
                 self.status_type,
                 self.status_time,
                 self.dmx_connected,
-                &self.plc_status
+                &self.plc_status,
+                self.settings.use_rgbw
             );
         });
         
@@ -908,13 +958,25 @@ impl eframe::App for PlaybackApp {
                 sidebar::AppView::Playlist => {
                     self.show_playlist_view(ctx, ui);
                 }
-                sidebar::AppView::DmxMap => {
+                sidebar::AppView::Settings => {
+                    // Settings parent - show nothing or a welcome message
+                    ui.vertical_centered(|ui| {
+                        ui.add_space(100.0);
+                        ui.heading("Settings");
+                        ui.add_space(20.0);
+                        ui.label("Select a settings category from the menu");
+                    });
+                }
+                sidebar::AppView::SettingsDmxMap => {
                     self.dmx_map_panel.show(ctx, ui);
                 }
-                sidebar::AppView::LightGroups => {
+                sidebar::AppView::SettingsLightGroups => {
                     self.light_group_panel.show(ctx, ui);
                 }
-                sidebar::AppView::Settings => {
+                sidebar::AppView::SettingsLegacyColor => {
+                    self.legacy_color_panel.show(ctx, ui);
+                }
+                sidebar::AppView::SettingsApp => {
                     self.show_settings_view(ctx, ui);
                 }
             }

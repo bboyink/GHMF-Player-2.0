@@ -1,0 +1,82 @@
+[
+  {
+    "index": 0,
+    "name": "Off",
+    "hex": "000000"
+  },
+  {
+    "index": 1,
+    "name": "Red",
+    "hex": "FF0000"
+  },
+  {
+    "index": 2,
+    "name": "Blue",
+    "hex": "0000FF"
+  },
+  {
+    "index": 3,
+    "name": "Violet",
+    "hex": "BA00FF"
+  },
+  {
+    "index": 4,
+    "name": "Yellow",
+    "hex": "FFE501"
+  },
+  {
+    "index": 5,
+    "name": "Orange",
+    "hex": "FF9001"
+  },
+  {
+    "index": 6,
+    "name": "Green",
+    "hex": "00FF00"
+  },
+  {
+    "index": 7,
+    "name": "Magenta",
+    "hex": "FF0A52"
+  },
+  {
+    "index": 8,
+    "name": "White",
+    "hex": "FFFFFF"
+  },
+  {
+    "index": 9,
+    "name": "Pink",
+    "hex": "FF3080"
+  },
+  {
+    "index": 10,
+    "name": "Cyan",
+    "hex": "33FFFF"
+  },
+  {
+    "index": 11,
+    "name": "Light Violet",
+    "hex": "9999FF"
+  },
+  {
+    "index": 12,
+    "name": "Spring Green",
+    "hex": "00EE76"
+  },
+  {
+    "index": 13,
+    "name": "Light Orange",
+    "hex": "FFC200"
+  },
+  {
+    "index": 14,
+    "name": "Light Green",
+    "hex": "4BFF3D"
+  },
+  {
+    "index": 15,
+    "name": "Incandescent",
+    "hex": "D2FFDB"
+  }
+]

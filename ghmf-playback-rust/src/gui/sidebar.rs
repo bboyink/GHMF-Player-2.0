@@ -7,9 +7,11 @@ pub enum AppView {
     Operator,
     Testing,
     Playlist,
-    DmxMap,
-    LightGroups,
     Settings,
+    SettingsDmxMap,
+    SettingsLightGroups,
+    SettingsLegacyColor,
+    SettingsApp,
 }
 
 impl AppView {
@@ -18,9 +20,11 @@ impl AppView {
             AppView::Operator => "▶",    // Play icon
             AppView::Testing => "⚡",     // Testing/bolt icon
             AppView::Playlist => "♫",    // Music note icon
-            AppView::DmxMap => "◉",      // DMX grid icon
-            AppView::LightGroups => "💡", // Light bulb icon
             AppView::Settings => "⚙",    // Settings gear icon
+            AppView::SettingsDmxMap => "◉",      // DMX grid icon
+            AppView::SettingsLightGroups => "💡", // Light bulb icon
+            AppView::SettingsLegacyColor => "🎨", // Palette icon
+            AppView::SettingsApp => "⚙",    // Settings gear icon
         }
     }
     
@@ -29,9 +33,11 @@ impl AppView {
             AppView::Operator => "Operator",
             AppView::Testing => "Testing",
             AppView::Playlist => "Playlist",
-            AppView::DmxMap => "DMX Map",
-            AppView::LightGroups => "Light Groups",
             AppView::Settings => "Settings",
+            AppView::SettingsDmxMap => "DMX Map",
+            AppView::SettingsLightGroups => "Light Groups",
+            AppView::SettingsLegacyColor => "Legacy Color",
+            AppView::SettingsApp => "Application",
         }
     }
     
@@ -40,9 +46,11 @@ impl AppView {
             AppView::Operator => "Operator Mode - Playback Controls",
             AppView::Testing => "Testing Mode - Light & System Testing",
             AppView::Playlist => "Playlist Manager",
-            AppView::DmxMap => "DMX Mapper - Assign Fixtures to DMX Channels",
-            AppView::LightGroups => "Light Group Mapping - Create FWC Light Groups",
-            AppView::Settings => "Application Settings",
+            AppView::Settings => "Settings Menu",
+            AppView::SettingsDmxMap => "DMX Mapper - Assign Fixtures to DMX Channels",
+            AppView::SettingsLightGroups => "Light Group Mapping - Create FWC Light Groups",
+            AppView::SettingsLegacyColor => "Legacy Color Mapping - Map FWC Values to RGB Colors",
+            AppView::SettingsApp => "Application Settings",
         }
     }
 }
@@ -50,7 +58,13 @@ impl AppView {
 pub struct Sidebar {
     pub selected_view: AppView,
     pub collapsed: bool,
+    pub settings_expanded: bool,
     logo_texture: Option<Arc<TextureHandle>>,
+    light_groups_icon: Option<Arc<TextureHandle>>,
+    app_settings_icon: Option<Arc<TextureHandle>>,
+    dmx_map_icon: Option<Arc<TextureHandle>>,
+    sort_down_icon: Option<Arc<TextureHandle>>,
+    palette_icon: Option<Arc<TextureHandle>>,
 }
 
 impl Default for Sidebar {
@@ -58,7 +72,13 @@ impl Default for Sidebar {
         Self {
             selected_view: AppView::Operator,
             collapsed: false,
+            settings_expanded: false,
             logo_texture: None,
+            light_groups_icon: None,
+            app_settings_icon: None,
+            dmx_map_icon: None,
+            sort_down_icon: None,
+            palette_icon: None,
         }
     }
 }
@@ -89,9 +109,108 @@ impl Sidebar {
         }
     }
 
+    /// Load icon textures from embedded image bytes
+    fn load_icons(&mut self, ctx: &Context) {
+        // Load Light Groups icon
+        if self.light_groups_icon.is_none() {
+            let icon_bytes = include_bytes!("../../assets/led-light.png");
+            if let Ok(image) = image::load_from_memory(icon_bytes) {
+                let size = [image.width() as _, image.height() as _];
+                let image_buffer = image.to_rgba8();
+                let pixels = image_buffer.as_flat_samples();
+                let color_image = ColorImage::from_rgba_unmultiplied(size, pixels.as_slice());
+                
+                let texture = ctx.load_texture(
+                    "light_groups_icon",
+                    color_image,
+                    Default::default()
+                );
+                
+                self.light_groups_icon = Some(Arc::new(texture));
+            }
+        }
+
+        // Load Application Settings icon
+        if self.app_settings_icon.is_none() {
+            let icon_bytes = include_bytes!("../../assets/window_settings.png");
+            if let Ok(image) = image::load_from_memory(icon_bytes) {
+                let size = [image.width() as _, image.height() as _];
+                let image_buffer = image.to_rgba8();
+                let pixels = image_buffer.as_flat_samples();
+                let color_image = ColorImage::from_rgba_unmultiplied(size, pixels.as_slice());
+                
+                let texture = ctx.load_texture(
+                    "app_settings_icon",
+                    color_image,
+                    Default::default()
+                );
+                
+                self.app_settings_icon = Some(Arc::new(texture));
+            }
+        }
+
+        // Load DMX Map icon
+        if self.dmx_map_icon.is_none() {
+            let icon_bytes = include_bytes!("../../assets/switches.png");
+            if let Ok(image) = image::load_from_memory(icon_bytes) {
+                let size = [image.width() as _, image.height() as _];
+                let image_buffer = image.to_rgba8();
+                let pixels = image_buffer.as_flat_samples();
+                let color_image = ColorImage::from_rgba_unmultiplied(size, pixels.as_slice());
+                
+                let texture = ctx.load_texture(
+                    "dmx_map_icon",
+                    color_image,
+                    Default::default()
+                );
+                
+                self.dmx_map_icon = Some(Arc::new(texture));
+            }
+        }
+
+        // Load Palette icon
+        if self.palette_icon.is_none() {
+            let icon_bytes = include_bytes!("../../assets/palette.png");
+            if let Ok(image) = image::load_from_memory(icon_bytes) {
+                let size = [image.width() as _, image.height() as _];
+                let image_buffer = image.to_rgba8();
+                let pixels = image_buffer.as_flat_samples();
+                let color_image = ColorImage::from_rgba_unmultiplied(size, pixels.as_slice());
+                
+                let texture = ctx.load_texture(
+                    "palette_icon",
+                    color_image,
+                    Default::default()
+                );
+                
+                self.palette_icon = Some(Arc::new(texture));
+            }
+        }
+
+        // Load Sort Down icon
+        if self.sort_down_icon.is_none() {
+            let icon_bytes = include_bytes!("../../assets/sort_down.png");
+            if let Ok(image) = image::load_from_memory(icon_bytes) {
+                let size = [image.width() as _, image.height() as _];
+                let image_buffer = image.to_rgba8();
+                let pixels = image_buffer.as_flat_samples();
+                let color_image = ColorImage::from_rgba_unmultiplied(size, pixels.as_slice());
+                
+                let texture = ctx.load_texture(
+                    "sort_down_icon",
+                    color_image,
+                    Default::default()
+                );
+                
+                self.sort_down_icon = Some(Arc::new(texture));
+            }
+        }
+    }
+
     pub fn show(&mut self, ctx: &Context, ui: &mut Ui) -> Option<AppView> {
         // Load logo texture if not already loaded
         self.load_logo(ctx);
+        self.load_icons(ctx);
         
         let mut clicked_view = None;
         
@@ -143,14 +262,32 @@ impl Sidebar {
                 AppView::Operator,
                 AppView::Testing,
                 AppView::Playlist,
-                AppView::DmxMap,
-                AppView::LightGroups,
-                AppView::Settings,
             ];
             
             for view in views {
                 if self.nav_button(ui, view) {
                     clicked_view = Some(view);
+                }
+            }
+            
+            // Settings menu with submenus
+            if self.settings_menu_button(ui) {
+                self.settings_expanded = !self.settings_expanded;
+            }
+            
+            // Show submenus if expanded
+            if self.settings_expanded {
+                let subviews = [
+                    AppView::SettingsDmxMap,
+                    AppView::SettingsLightGroups,
+                    AppView::SettingsLegacyColor,
+                    AppView::SettingsApp,
+                ];
+                
+                for view in subviews {
+                    if self.submenu_button(ui, view) {
+                        clicked_view = Some(view);
+                    }
                 }
             }
             
@@ -241,6 +378,251 @@ impl Sidebar {
                 text_color
             );
         }
+        
+        let tooltip_response = response.on_hover_text(view.tooltip());
+        
+        if tooltip_response.clicked() {
+            self.selected_view = view;
+            true
+        } else {
+            false
+        }
+    }
+    
+    fn settings_menu_button(&mut self, ui: &mut Ui) -> bool {
+        // Don't highlight Settings button when a submenu is selected
+        let is_selected = false;
+        
+        let button_color = Color32::TRANSPARENT;
+        
+        let hover_color = AppColors::SURFACE;
+        
+        let text_color = AppColors::TEXT_SECONDARY;
+        
+        let (rect, response) = ui.allocate_exact_size(
+            Vec2::new(ui.available_width(), 48.0),
+            egui::Sense::click()
+        );
+        
+        if response.hovered() {
+            ui.painter().rect_filled(
+                rect.shrink(4.0),
+                8.0,
+                hover_color
+            );
+        }
+        
+        // Icon
+        let icon_pos = Pos2::new(rect.min.x + 24.0, rect.center().y);
+        ui.painter().text(
+            icon_pos,
+            egui::Align2::LEFT_CENTER,
+            "⚙",
+            FontId::new(22.0, FontFamily::Proportional),
+            text_color
+        );
+        
+        // Label
+        let label_pos = Pos2::new(rect.min.x + 56.0, rect.center().y);
+        ui.painter().text(
+            label_pos,
+            egui::Align2::LEFT_CENTER,
+            "Settings",
+            FontId::new(15.0, FontFamily::Proportional),
+            text_color
+        );
+        
+        // Expand/collapse arrow - use image when expanded
+        let arrow_size = 12.0;
+        let arrow_pos = Pos2::new(rect.max.x - 20.0, rect.center().y);
+        
+        if self.settings_expanded {
+            if let Some(icon) = &self.sort_down_icon {
+                let icon_rect = Rect::from_center_size(
+                    arrow_pos,
+                    Vec2::new(arrow_size, arrow_size)
+                );
+                ui.painter().image(
+                    icon.id(),
+                    icon_rect,
+                    Rect::from_min_max(Pos2::ZERO, Pos2::new(1.0, 1.0)),
+                    Color32::WHITE
+                );
+            } else {
+                ui.painter().text(
+                    arrow_pos,
+                    egui::Align2::CENTER_CENTER,
+                    "▼",
+                    FontId::new(arrow_size, FontFamily::Proportional),
+                    text_color
+                );
+            }
+        } else {
+            ui.painter().text(
+                arrow_pos,
+                egui::Align2::CENTER_CENTER,
+                "▶",
+                FontId::new(arrow_size, FontFamily::Proportional),
+                text_color
+            );
+        }
+        
+        response.on_hover_text("Settings Menu").clicked()
+    }
+    
+    fn submenu_button(&mut self, ui: &mut Ui, view: AppView) -> bool {
+        let is_selected = self.selected_view == view;
+        
+        let button_color = if is_selected {
+            Color32::from_rgba_unmultiplied(0, 198, 255, 40)
+        } else {
+            Color32::TRANSPARENT
+        };
+        
+        let hover_color = if is_selected {
+            Color32::from_rgba_unmultiplied(0, 198, 255, 60)
+        } else {
+            AppColors::SURFACE
+        };
+        
+        let text_color = if is_selected {
+            Color32::WHITE
+        } else {
+            AppColors::TEXT_SECONDARY
+        };
+        
+        let (rect, response) = ui.allocate_exact_size(
+            Vec2::new(ui.available_width(), 40.0),
+            egui::Sense::click()
+        );
+        
+        if response.hovered() {
+            ui.painter().rect_filled(
+                rect.shrink2(Vec2::new(8.0, 2.0)),
+                6.0,
+                hover_color
+            );
+        } else if is_selected {
+            ui.painter().rect_filled(
+                rect.shrink2(Vec2::new(8.0, 2.0)),
+                6.0,
+                button_color
+            );
+        }
+        
+        // Icon (smaller and indented) - use image for DMX Map, Light Groups and App Settings
+        let icon_size = 18.0;
+        let icon_pos = Pos2::new(rect.min.x + 40.0, rect.center().y);
+        
+        match view {
+            AppView::SettingsDmxMap => {
+                if let Some(icon) = &self.dmx_map_icon {
+                    let icon_rect = Rect::from_center_size(
+                        icon_pos,
+                        Vec2::new(icon_size, icon_size)
+                    );
+                    ui.painter().image(
+                        icon.id(),
+                        icon_rect,
+                        Rect::from_min_max(Pos2::ZERO, Pos2::new(1.0, 1.0)),
+                        Color32::WHITE
+                    );
+                } else {
+                    ui.painter().text(
+                        icon_pos,
+                        egui::Align2::LEFT_CENTER,
+                        view.icon(),
+                        FontId::new(icon_size, FontFamily::Proportional),
+                        text_color
+                    );
+                }
+            }
+            AppView::SettingsLightGroups => {
+                if let Some(icon) = &self.light_groups_icon {
+                    let icon_rect = Rect::from_center_size(
+                        icon_pos,
+                        Vec2::new(icon_size, icon_size)
+                    );
+                    ui.painter().image(
+                        icon.id(),
+                        icon_rect,
+                        Rect::from_min_max(Pos2::ZERO, Pos2::new(1.0, 1.0)),
+                        Color32::WHITE
+                    );
+                } else {
+                    ui.painter().text(
+                        icon_pos,
+                        egui::Align2::LEFT_CENTER,
+                        view.icon(),
+                        FontId::new(icon_size, FontFamily::Proportional),
+                        text_color
+                    );
+                }
+            }
+            AppView::SettingsLegacyColor => {
+                if let Some(icon) = &self.palette_icon {
+                    let icon_rect = Rect::from_center_size(
+                        icon_pos,
+                        Vec2::new(icon_size, icon_size)
+                    );
+                    ui.painter().image(
+                        icon.id(),
+                        icon_rect,
+                        Rect::from_min_max(Pos2::ZERO, Pos2::new(1.0, 1.0)),
+                        Color32::WHITE
+                    );
+                } else {
+                    ui.painter().text(
+                        icon_pos,
+                        egui::Align2::LEFT_CENTER,
+                        view.icon(),
+                        FontId::new(icon_size, FontFamily::Proportional),
+                        text_color
+                    );
+                }
+            }
+            AppView::SettingsApp => {
+                if let Some(icon) = &self.app_settings_icon {
+                    let icon_rect = Rect::from_center_size(
+                        icon_pos,
+                        Vec2::new(icon_size, icon_size)
+                    );
+                    ui.painter().image(
+                        icon.id(),
+                        icon_rect,
+                        Rect::from_min_max(Pos2::ZERO, Pos2::new(1.0, 1.0)),
+                        Color32::WHITE
+                    );
+                } else {
+                    ui.painter().text(
+                        icon_pos,
+                        egui::Align2::LEFT_CENTER,
+                        view.icon(),
+                        FontId::new(icon_size, FontFamily::Proportional),
+                        text_color
+                    );
+                }
+            }
+            _ => {
+                ui.painter().text(
+                    icon_pos,
+                    egui::Align2::LEFT_CENTER,
+                    view.icon(),
+                    FontId::new(icon_size, FontFamily::Proportional),
+                    text_color
+                );
+            }
+        }
+        
+        // Label (smaller)
+        let label_pos = Pos2::new(rect.min.x + 66.0, rect.center().y);
+        ui.painter().text(
+            label_pos,
+            egui::Align2::LEFT_CENTER,
+            view.label(),
+            FontId::new(13.0, FontFamily::Proportional),
+            text_color
+        );
         
         let tooltip_response = response.on_hover_text(view.tooltip());
         

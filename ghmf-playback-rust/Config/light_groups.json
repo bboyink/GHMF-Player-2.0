@@ -4,6 +4,7 @@
       "name": "Module 1",
       "fcw_code": "017",
       "fcw_fade_code": "117",
+      "channel_format": "RGBW",
       "fixture_ids": [
         1,
         2,
@@ -17,6 +18,7 @@
       "name": "Module 2",
       "fcw_code": "018",
       "fcw_fade_code": "118",
+      "channel_format": "RGBW",
       "fixture_ids": [
         7,
         8,
@@ -29,6 +31,7 @@
     {
       "name": "Moudle 3",
       "fcw_code": "019",
+      "channel_format": "RGBW",
       "fcw_fade_code": "119",
       "fixture_ids": [
         13,
@@ -40,8 +43,9 @@
       ]
     },
     {
-      "name": "Group 4",
+      "name": "Module 4",
       "fcw_code": "020",
+      "channel_format": "RGBW",
       "fcw_fade_code": "120",
       "fixture_ids": [
         19,
@@ -53,7 +57,8 @@
       ]
     },
     {
-      "name": "Group 5",
+      "name": "Module 5",
+      "channel_format": "RGBW",
       "fcw_code": "021",
       "fcw_fade_code": "121",
       "fixture_ids": [
@@ -66,7 +71,8 @@
       ]
     },
     {
-      "name": "Group 6",
+      "name": "Module 6",
+      "channel_format": "RGBW",
       "fcw_code": "022",
       "fcw_fade_code": "122",
       "fixture_ids": [
@@ -79,7 +85,8 @@
       ]
     },
     {
-      "name": "Group 7",
+      "channel_format": "RGBW",
+      "name": "Module 7",
       "fcw_code": "023",
       "fcw_fade_code": "123",
       "fixture_ids": [
@@ -104,7 +111,8 @@
         48,
         49,
         50
-      ]
+      ],
+      "channel_format": "RGBW"
     },
     {
       "name": "All A",
@@ -135,7 +143,8 @@
         40,
         41,
         42
-      ]
+      ],
+      "channel_format": "RGBW"
     },
     {
       "name": "All B",
@@ -160,7 +169,8 @@
         34,
         35,
         36
-      ]
+      ],
+      "channel_format": "RGBW"
     },
     {
       "name": "Voice",
@@ -169,7 +179,8 @@
       "fixture_ids": [
         51,
         52
-      ]
+      ],
+      "channel_format": "RGBW"
     },
     {
       "name": "Front Row Lights",
@@ -197,7 +208,8 @@
         37,
         38,
         39
-      ]
+      ],
+      "channel_format": "RGBW"
     },
     {
       "name": "Back Row Lights",
@@ -225,7 +237,8 @@
         40,
         41,
         42
-      ]
+      ],
+      "channel_format": "RGBW"
     },
     {
       "name": "Dove  Left",
@@ -233,7 +246,8 @@
       "fcw_fade_code": "644",
       "fixture_ids": [
         53
-      ]
+      ],
+      "channel_format": "RGBW"
     },
     {
       "name": "Dove Right",
@@ -241,7 +255,8 @@
       "fcw_fade_code": "645",
       "fixture_ids": [
         54
-      ]
+      ],
+      "channel_format": "RGBW"
     },
     {
       "name": "Spout/Helix  Left",
@@ -249,7 +264,8 @@
       "fcw_fade_code": "642",
       "fixture_ids": [
         51
-      ]
+      ],
+      "channel_format": "RGBW"
     },
     {
       "name": "Spout/Helix Right",
@@ -257,34 +273,517 @@
       "fcw_fade_code": "643",
       "fixture_ids": [
         52
-      ]
+      ],
+      "channel_format": "RGBW"
     },
     {
       "name": "Module 1 Left",
       "fcw_code": "301",
-      "fcw_fade_code": "0",
+      "fcw_fade_code": "",
       "fixture_ids": [
         1,
         4
-      ]
-    },
-    {
-      "name": "Module 1 Right",
-      "fcw_code": "309",
-      "fcw_fade_code": "0",
-      "fixture_ids": [
-        2,
-        6
-      ]
+      ],
+      "channel_format": "RGBW"
     },
     {
       "name": "Module 2 Left",
       "fcw_code": "302",
-      "fcw_fade_code": "0",
+      "fcw_fade_code": "",
       "fixture_ids": [
         7,
         10
-      ]
+      ],
+      "channel_format": "RGBW"
+    },
+    {
+      "name": "Module 3 Left",
+      "fcw_code": "303",
+      "fcw_fade_code": "",
+      "fixture_ids": [
+        13,
+        16
+      ],
+      "channel_format": "RGBW"
+    },
+    {
+      "name": "Module 4 Left",
+      "fcw_code": "304",
+      "fcw_fade_code": "",
+      "fixture_ids": [
+        19,
+        22
+      ],
+      "channel_format": "RGBW"
+    },
+    {
+      "name": "Module 5 Left",
+      "fcw_code": "305",
+      "fcw_fade_code": "",
+      "fixture_ids": [
+        25,
+        28
+      ],
+      "channel_format": "RGBW"
+    },
+    {
+      "name": "Module 6 Left",
+      "fcw_code": "306",
+      "fcw_fade_code": "",
+      "fixture_ids": [
+        31,
+        34
+      ],
+      "channel_format": "RGBW"
+    },
+    {
+      "name": "Module 7 Left",
+      "fcw_code": "307",
+      "fcw_fade_code": "",
+      "fixture_ids": [
+        37,
+        40
+      ],
+      "channel_format": "RGBW"
+    },
+    {
+      "name": "Module 1 Right",
+      "fcw_code": "309",
+      "fcw_fade_code": "",
+      "fixture_ids": [
+        2,
+        6
+      ],
+      "channel_format": "RGBW"
+    },
+    {
+      "name": "Module 2 Right",
+      "fcw_code": "310",
+      "fcw_fade_code": "",
+      "fixture_ids": [
+        8,
+        12
+      ],
+      "channel_format": "RGBW"
+    },
+    {
+      "name": "Module 3 Right",
+      "fcw_code": "311",
+      "fcw_fade_code": "",
+      "fixture_ids": [
+        14,
+        18
+      ],
+      "channel_format": "RGBW"
+    },
+    {
+      "name": "Module 4 Right",
+      "fcw_code": "312",
+      "fcw_fade_code": "",
+      "fixture_ids": [
+        20,
+        24
+      ],
+      "channel_format": "RGBW"
+    },
+    {
+      "name": "Module 5 Right",
+      "fcw_code": "313",
+      "fcw_fade_code": "",
+      "fixture_ids": [
+        26,
+        30
+      ],
+      "channel_format": "RGBW"
+    },
+    {
+      "name": "Module 6 Right",
+      "fcw_code": "314",
+      "fcw_fade_code": "",
+      "fixture_ids": [
+        32,
+        36
+      ],
+      "channel_format": "RGBW"
+    },
+    {
+      "name": "Module 7 Right",
+      "fcw_code": "315",
+      "fcw_fade_code": "",
+      "fixture_ids": [
+        38,
+        42
+      ],
+      "channel_format": "RGBW"
+    },
+    {
+      "name": "Peacock Light 1",
+      "fcw_code": "536",
+      "fcw_fade_code": "636",
+      "fixture_ids": [
+        43
+      ],
+      "channel_format": "RGBW"
+    },
+    {
+      "name": "Peacock Light 2",
+      "fcw_code": "537",
+      "fcw_fade_code": "637",
+      "fixture_ids": [
+        44
+      ],
+      "channel_format": "RGBW"
+    },
+    {
+      "name": "Peacock Light 3",
+      "fcw_code": "538",
+      "fcw_fade_code": "638",
+      "fixture_ids": [
+        45
+      ],
+      "channel_format": "RGBW"
+    },
+    {
+      "name": "Peacock Light 4",
+      "fcw_code": "539",
+      "fcw_fade_code": "639",
+      "fixture_ids": [
+        46
+      ],
+      "channel_format": "RGBW"
+    },
+    {
+      "name": "Peacock Light 5",
+      "fcw_code": "540",
+      "fcw_fade_code": "640",
+      "fixture_ids": [
+        47
+      ],
+      "channel_format": "RGBW"
+    },
+    {
+      "name": "Peacock Light 6",
+      "fcw_code": "541",
+      "fcw_fade_code": "641",
+      "fixture_ids": [
+        48
+      ],
+      "channel_format": "RGBW"
+    },
+    {
+      "name": "Module 1 - Light 1",
+      "fcw_code": "501",
+      "fcw_fade_code": "601",
+      "fixture_ids": [
+        1
+      ],
+      "channel_format": "RGBW"
+    },
+    {
+      "name": "Module 1 - Light 2",
+      "fcw_code": "502",
+      "fcw_fade_code": "602",
+      "fixture_ids": [
+        2
+      ],
+      "channel_format": "RGBW"
+    },
+    {
+      "name": "Module 1 - Light 3",
+      "fcw_code": "503",
+      "fcw_fade_code": "603",
+      "fixture_ids": [
+        3
+      ],
+      "channel_format": "RGBW"
+    },
+    {
+      "name": "Module 1 - Light 4",
+      "fcw_code": "504",
+      "fcw_fade_code": "604",
+      "fixture_ids": [
+        4
+      ],
+      "channel_format": "RGBW"
+    },
+    {
+      "name": "Module 1 - Light 6",
+      "fcw_code": "505",
+      "fcw_fade_code": "605",
+      "fixture_ids": [
+        6
+      ],
+      "channel_format": "RGBW"
+    },
+    {
+      "name": "Module 2 - Light 1",
+      "fcw_code": "507",
+      "fcw_fade_code": "607",
+      "fixture_ids": [
+        7
+      ],
+      "channel_format": "RGBW"
+    },
+    {
+      "name": "Module 2 - Light 2",
+      "fcw_code": "506",
+      "fcw_fade_code": "606",
+      "fixture_ids": [
+        8
+      ],
+      "channel_format": "RGBW"
+    },
+    {
+      "name": "Module 2 - Light 3",
+      "fcw_code": "508",
+      "fcw_fade_code": "608",
+      "fixture_ids": [
+        9
+      ],
+      "channel_format": "RGBW"
+    },
+    {
+      "name": "Module 2 - Light 4",
+      "fcw_code": "509",
+      "fcw_fade_code": "609",
+      "fixture_ids": [
+        10
+      ],
+      "channel_format": "RGBW"
+    },
+    {
+      "name": "Module 2 - Light 6",
+      "fcw_code": "510",
+      "fcw_fade_code": "610",
+      "fixture_ids": [
+        12
+      ],
+      "channel_format": "RGBW"
+    },
+    {
+      "name": "Module 3 - Light 1",
+      "fcw_code": "512",
+      "fcw_fade_code": "612",
+      "fixture_ids": [
+        13
+      ],
+      "channel_format": "RGBW"
+    },
+    {
+      "name": "Module 3 - Light 2",
+      "fcw_code": "511",
+      "fcw_fade_code": "611",
+      "fixture_ids": [
+        14
+      ],
+      "channel_format": "RGBW"
+    },
+    {
+      "name": "Module 3 - Light 3",
+      "fcw_code": "513",
+      "fcw_fade_code": "613",
+      "fixture_ids": [
+        15
+      ],
+      "channel_format": "RGBW"
+    },
+    {
+      "name": "Module 3 - Light 4",
+      "fcw_code": "514",
+      "fcw_fade_code": "614",
+      "fixture_ids": [
+        16
+      ],
+      "channel_format": "RGBW"
+    },
+    {
+      "name": "Module 3 - Light 6",
+      "fcw_code": "515",
+      "fcw_fade_code": "615",
+      "fixture_ids": [
+        18
+      ],
+      "channel_format": "RGBW"
+    },
+    {
+      "name": "Module 4 - Light 1",
+      "fcw_code": "516",
+      "fcw_fade_code": "616",
+      "fixture_ids": [
+        19
+      ],
+      "channel_format": "RGBW"
+    },
+    {
+      "name": "Module 4 - Light 2",
+      "fcw_code": "517",
+      "fcw_fade_code": "617",
+      "fixture_ids": [
+        20
+      ],
+      "channel_format": "RGBW"
+    },
+    {
+      "name": "Module 4 - Light 3",
+      "fcw_code": "518",
+      "fcw_fade_code": "618",
+      "fixture_ids": [
+        21
+      ],
+      "channel_format": "RGBW"
+    },
+    {
+      "name": "Module 4 - Light 4",
+      "fcw_code": "519",
+      "fcw_fade_code": "619",
+      "fixture_ids": [
+        22
+      ],
+      "channel_format": "RGBW"
+    },
+    {
+      "name": "Module 4 - Light 6",
+      "fcw_code": "520",
+      "fcw_fade_code": "620",
+      "fixture_ids": [
+        24
+      ],
+      "channel_format": "RGBW"
+    },
+    {
+      "name": "Module 5 - Light 1",
+      "fcw_code": "521",
+      "fcw_fade_code": "621",
+      "fixture_ids": [
+        25
+      ],
+      "channel_format": "RGBW"
+    },
+    {
+      "name": "Module 5 - Light 2",
+      "fcw_code": "522",
+      "fcw_fade_code": "622",
+      "fixture_ids": [
+        26
+      ],
+      "channel_format": "RGBW"
+    },
+    {
+      "name": "Module 5 - Light 3",
+      "fcw_code": "523",
+      "fcw_fade_code": "623",
+      "fixture_ids": [
+        27
+      ],
+      "channel_format": "RGBW"
+    },
+    {
+      "name": "Module 5 - Light 4",
+      "fcw_code": "524",
+      "fcw_fade_code": "624",
+      "fixture_ids": [
+        28
+      ],
+      "channel_format": "RGBW"
+    },
+    {
+      "name": "Module 5 - Light 6",
+      "fcw_code": "525",
+      "fcw_fade_code": "625",
+      "fixture_ids": [
+        30
+      ],
+      "channel_format": "RGBW"
+    },
+    {
+      "name": "Module 6 - Light 1",
+      "fcw_code": "526",
+      "fcw_fade_code": "626",
+      "fixture_ids": [
+        31
+      ],
+      "channel_format": "RGBW"
+    },
+    {
+      "name": "Module 6 - Light 2",
+      "fcw_code": "527",
+      "fcw_fade_code": "627",
+      "fixture_ids": [
+        32
+      ],
+      "channel_format": "RGBW"
+    },
+    {
+      "name": "Module 6 - Light 3",
+      "fcw_code": "528",
+      "fcw_fade_code": "628",
+      "fixture_ids": [
+        33
+      ],
+      "channel_format": "RGBW"
+    },
+    {
+      "name": "Module 6 - Light 4",
+      "fcw_code": "529",
+      "fcw_fade_code": "629",
+      "fixture_ids": [
+        34
+      ],
+      "channel_format": "RGBW"
+    },
+    {
+      "name": "Module 6 - Light 6",
+      "fcw_code": "530",
+      "fcw_fade_code": "630",
+      "fixture_ids": [
+        36
+      ],
+      "channel_format": "RGBW"
+    },
+    {
+      "name": "Module 7 - Light 1",
+      "fcw_code": "531",
+      "fcw_fade_code": "631",
+      "fixture_ids": [
+        37
+      ],
+      "channel_format": "RGBW"
+    },
+    {
+      "name": "Module 7 - Light 2",
+      "fcw_code": "532",
+      "fcw_fade_code": "632",
+      "fixture_ids": [
+        38
+      ],
+      "channel_format": "RGBW"
+    },
+    {
+      "name": "Module 7 - Light 3",
+      "fcw_code": "533",
+      "fcw_fade_code": "633",
+      "fixture_ids": [
+        39
+      ],
+      "channel_format": "RGBW"
+    },
+    {
+      "name": "Module 7 - Light 4",
+      "fcw_code": "534",
+      "fcw_fade_code": "634",
+      "fixture_ids": [
+        40
+      ],
+      "channel_format": "RGBW"
+    },
+    {
+      "name": "Module 7 - Light 6",
+      "fcw_code": "535",
+      "fcw_fade_code": "635",
+      "fixture_ids": [
+        42
+      ],
+      "channel_format": "RGBW"
     }
   ]
 }
