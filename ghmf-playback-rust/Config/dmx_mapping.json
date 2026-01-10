@@ -11,6 +11,266 @@
       "start_channel": 5
     },
     {
+      "fixture_id": 3,
+      "fixture_name": "Mod. 1 Center",
+      "start_channel": 9
+    },
+    {
+      "fixture_id": 4,
+      "fixture_name": "Mod. 1 Back Left",
+      "start_channel": 13
+    },
+    {
+      "fixture_id": 5,
+      "fixture_name": "Mod. 1 Back Center",
+      "start_channel": 17
+    },
+    {
+      "fixture_id": 6,
+      "fixture_name": "Mod. 1 Back Right",
+      "start_channel": 21
+    },
+    {
+      "fixture_id": 7,
+      "fixture_name": "Mod. 2 Front Left",
+      "start_channel": 25
+    },
+    {
+      "fixture_id": 8,
+      "fixture_name": "Mod. 2 Front Right",
+      "start_channel": 29
+    },
+    {
+      "fixture_id": 9,
+      "fixture_name": "Mod. 2 Center",
+      "start_channel": 33
+    },
+    {
+      "fixture_id": 10,
+      "fixture_name": "Mod. 2 Back Left",
+      "start_channel": 37
+    },
+    {
+      "fixture_id": 11,
+      "fixture_name": "Mod. 2 Back Center",
+      "start_channel": 41
+    },
+    {
+      "fixture_id": 12,
+      "fixture_name": "Mod. 2 Back Right",
+      "start_channel": 45
+    },
+    {
+      "fixture_id": 13,
+      "fixture_name": "Mod. 3 Front Left",
+      "start_channel": 49
+    },
+    {
+      "fixture_id": 14,
+      "fixture_name": "Mod. 3 Front Right",
+      "start_channel": 53
+    },
+    {
+      "fixture_id": 15,
+      "fixture_name": "Mod. 3 Center",
+      "start_channel": 57
+    },
+    {
+      "fixture_id": 16,
+      "fixture_name": "Mod. 3 Back Left",
+      "start_channel": 61
+    },
+    {
+      "fixture_id": 17,
+      "fixture_name": "Mod. 3 Back Center",
+      "start_channel": 65
+    },
+    {
+      "fixture_id": 18,
+      "fixture_name": "Mod. 3 Back Right",
+      "start_channel": 69
+    },
+    {
+      "fixture_id": 19,
+      "fixture_name": "Mod. 4 Front Left",
+      "start_channel": 73
+    },
+    {
+      "fixture_id": 20,
+      "fixture_name": "Mod. 4 Front Right",
+      "start_channel": 77
+    },
+    {
+      "fixture_id": 21,
+      "fixture_name": "Mod. 4 Center",
+      "start_channel": 81
+    },
+    {
+      "fixture_id": 22,
+      "fixture_name": "Mod. 4 Back Left",
+      "start_channel": 85
+    },
+    {
+      "fixture_id": 23,
+      "fixture_name": "Mod. 4 Back Center",
+      "start_channel": 89
+    },
+    {
+      "fixture_id": 24,
+      "fixture_name": "Mod. 4 Back Right",
+      "start_channel": 93
+    },
+    {
+      "fixture_id": 25,
+      "fixture_name": "Mod. 5 Front Left",
+      "start_channel": 97
+    },
+    {
+      "fixture_id": 26,
+      "fixture_name": "Mod. 5 Front Right",
+      "start_channel": 101
+    },
+    {
+      "fixture_id": 27,
+      "fixture_name": "Mod. 5 Center",
+      "start_channel": 105
+    },
+    {
+      "fixture_id": 28,
+      "fixture_name": "Mod. 5 Back Left",
+      "start_channel": 109
+    },
+    {
+      "fixture_id": 29,
+      "fixture_name": "Mod. 5 Back Center",
+      "start_channel": 113
+    },
+    {
+      "fixture_id": 30,
+      "fixture_name": "Mod. 5 Back Right",
+      "start_channel": 117
+    },
+    {
+      "fixture_id": 31,
+      "fixture_name": "Mod. 6 Front Left",
+      "start_channel": 121
+    },
+    {
+      "fixture_id": 32,
+      "fixture_name": "Mod. 6 Front Right",
+      "start_channel": 125
+    },
+    {
+      "fixture_id": 33,
+      "fixture_name": "Mod. 6 Center",
+      "start_channel": 129
+    },
+    {
+      "fixture_id": 34,
+      "fixture_name": "Mod. 6 Back Left",
+      "start_channel": 133
+    },
+    {
+      "fixture_id": 35,
+      "fixture_name": "Mod. 6 Back Center",
+      "start_channel": 137
+    },
+    {
+      "fixture_id": 36,
+      "fixture_name": "Mod. 6 Back Right",
+      "start_channel": 141
+    },
+    {
+      "fixture_id": 37,
+      "fixture_name": "Mod. 7 Front Left",
+      "start_channel": 145
+    },
+    {
+      "fixture_id": 38,
+      "fixture_name": "Mod. 7 Front Right",
+      "start_channel": 149
+    },
+    {
+      "fixture_id": 39,
+      "fixture_name": "Mod. 7 Center",
+      "start_channel": 153
+    },
+    {
+      "fixture_id": 40,
+      "fixture_name": "Mod. 7 Back Left",
+      "start_channel": 157
+    },
+    {
+      "fixture_id": 41,
+      "fixture_name": "Mod. 7 Back Center",
+      "start_channel": 161
+    },
+    {
+      "fixture_id": 42,
+      "fixture_name": "Mod. 7 Back Right",
+      "start_channel": 165
+    },
+    {
+      "fixture_id": 43,
+      "fixture_name": "Peacock Light 1",
+      "start_channel": 169
+    },
+    {
+      "fixture_id": 44,
+      "fixture_name": "Peacock Light 2",
+      "start_channel": 173
+    },
+    {
+      "fixture_id": 45,
+      "fixture_name": "Peacock Light 3",
+      "start_channel": 177
+    },
+    {
+      "fixture_id": 46,
+      "fixture_name": "Peacock Light 4",
+      "start_channel": 181
+    },
+    {
+      "fixture_id": 47,
+      "fixture_name": "Peacock Light 5",
+      "start_channel": 185
+    },
+    {
+      "fixture_id": 48,
+      "fixture_name": "Peacock Light 6",
+      "start_channel": 189
+    },
+    {
+      "fixture_id": 49,
+      "fixture_name": "Peacock Back Left",
+      "start_channel": 193
+    },
+    {
+      "fixture_id": 50,
+      "fixture_name": "Peacock Back Right",
+      "start_channel": 197
+    },
+    {
+      "fixture_id": 51,
+      "fixture_name": "Helix Left",
+      "start_channel": 201
+    },
+    {
+      "fixture_id": 52,
+      "fixture_name": "Helix Right",
+      "start_channel": 205
+    },
+    {
+      "fixture_id": 53,
+      "fixture_name": "Dove Left",
+      "start_channel": 209
+    },
+    {
+      "fixture_id": 54,
+      "fixture_name": "Dove Right",
+      "start_channel": 213
+    },
+    {
       "fixture_id": 55,
       "fixture_name": "Fireworks",
       "start_channel": 500

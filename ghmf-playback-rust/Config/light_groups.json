@@ -1,0 +1,290 @@
+{
+  "groups": [
+    {
+      "name": "Module 1",
+      "fcw_code": "017",
+      "fcw_fade_code": "117",
+      "fixture_ids": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6
+      ]
+    },
+    {
+      "name": "Module 2",
+      "fcw_code": "018",
+      "fcw_fade_code": "118",
+      "fixture_ids": [
+        7,
+        8,
+        9,
+        10,
+        11,
+        12
+      ]
+    },
+    {
+      "name": "Moudle 3",
+      "fcw_code": "019",
+      "fcw_fade_code": "119",
+      "fixture_ids": [
+        13,
+        14,
+        15,
+        16,
+        17,
+        18
+      ]
+    },
+    {
+      "name": "Group 4",
+      "fcw_code": "020",
+      "fcw_fade_code": "120",
+      "fixture_ids": [
+        19,
+        20,
+        21,
+        22,
+        23,
+        24
+      ]
+    },
+    {
+      "name": "Group 5",
+      "fcw_code": "021",
+      "fcw_fade_code": "121",
+      "fixture_ids": [
+        25,
+        26,
+        27,
+        28,
+        29,
+        30
+      ]
+    },
+    {
+      "name": "Group 6",
+      "fcw_code": "022",
+      "fcw_fade_code": "122",
+      "fixture_ids": [
+        31,
+        32,
+        33,
+        34,
+        35,
+        36
+      ]
+    },
+    {
+      "name": "Group 7",
+      "fcw_code": "023",
+      "fcw_fade_code": "123",
+      "fixture_ids": [
+        37,
+        38,
+        39,
+        40,
+        41,
+        42
+      ]
+    },
+    {
+      "name": "Peacock",
+      "fcw_code": "027",
+      "fcw_fade_code": "127",
+      "fixture_ids": [
+        43,
+        44,
+        45,
+        46,
+        47,
+        48,
+        49,
+        50
+      ]
+    },
+    {
+      "name": "All A",
+      "fcw_code": "049",
+      "fcw_fade_code": "149",
+      "fixture_ids": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        25,
+        26,
+        27,
+        28,
+        29,
+        30,
+        37,
+        38,
+        39,
+        40,
+        41,
+        42
+      ]
+    },
+    {
+      "name": "All B",
+      "fcw_code": "050",
+      "fcw_fade_code": "150",
+      "fixture_ids": [
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        19,
+        20,
+        21,
+        22,
+        23,
+        24,
+        31,
+        32,
+        33,
+        34,
+        35,
+        36
+      ]
+    },
+    {
+      "name": "Voice",
+      "fcw_code": "055",
+      "fcw_fade_code": "155",
+      "fixture_ids": [
+        51,
+        52
+      ]
+    },
+    {
+      "name": "Front Row Lights",
+      "fcw_code": "056",
+      "fcw_fade_code": "156",
+      "fixture_ids": [
+        1,
+        2,
+        3,
+        7,
+        8,
+        9,
+        13,
+        14,
+        15,
+        19,
+        20,
+        21,
+        25,
+        26,
+        27,
+        31,
+        32,
+        33,
+        37,
+        38,
+        39
+      ]
+    },
+    {
+      "name": "Back Row Lights",
+      "fcw_code": "057",
+      "fcw_fade_code": "157",
+      "fixture_ids": [
+        4,
+        5,
+        6,
+        10,
+        11,
+        12,
+        16,
+        17,
+        18,
+        22,
+        23,
+        24,
+        28,
+        29,
+        30,
+        34,
+        35,
+        36,
+        40,
+        41,
+        42
+      ]
+    },
+    {
+      "name": "Dove  Left",
+      "fcw_code": "544",
+      "fcw_fade_code": "644",
+      "fixture_ids": [
+        53
+      ]
+    },
+    {
+      "name": "Dove Right",
+      "fcw_code": "545",
+      "fcw_fade_code": "645",
+      "fixture_ids": [
+        54
+      ]
+    },
+    {
+      "name": "Spout/Helix  Left",
+      "fcw_code": "542",
+      "fcw_fade_code": "642",
+      "fixture_ids": [
+        51
+      ]
+    },
+    {
+      "name": "Spout/Helix Right",
+      "fcw_code": "543",
+      "fcw_fade_code": "643",
+      "fixture_ids": [
+        52
+      ]
+    },
+    {
+      "name": "Module 1 Left",
+      "fcw_code": "301",
+      "fcw_fade_code": "0",
+      "fixture_ids": [
+        1,
+        4
+      ]
+    },
+    {
+      "name": "Module 1 Right",
+      "fcw_code": "309",
+      "fcw_fade_code": "0",
+      "fixture_ids": [
+        2,
+        6
+      ]
+    },
+    {
+      "name": "Module 2 Left",
+      "fcw_code": "302",
+      "fcw_fade_code": "0",
+      "fixture_ids": [
+        7,
+        10
+      ]
+    }
+  ]
+}

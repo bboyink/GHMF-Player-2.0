@@ -8,6 +8,7 @@ pub enum AppView {
     Testing,
     Playlist,
     DmxMap,
+    LightGroups,
     Settings,
 }
 
@@ -18,6 +19,7 @@ impl AppView {
             AppView::Testing => "⚡",     // Testing/bolt icon
             AppView::Playlist => "♫",    // Music note icon
             AppView::DmxMap => "◉",      // DMX grid icon
+            AppView::LightGroups => "💡", // Light bulb icon
             AppView::Settings => "⚙",    // Settings gear icon
         }
     }
@@ -28,6 +30,7 @@ impl AppView {
             AppView::Testing => "Testing",
             AppView::Playlist => "Playlist",
             AppView::DmxMap => "DMX Map",
+            AppView::LightGroups => "Light Groups",
             AppView::Settings => "Settings",
         }
     }
@@ -38,6 +41,7 @@ impl AppView {
             AppView::Testing => "Testing Mode - Light & System Testing",
             AppView::Playlist => "Playlist Manager",
             AppView::DmxMap => "DMX Mapper - Assign Fixtures to DMX Channels",
+            AppView::LightGroups => "Light Group Mapping - Create FWC Light Groups",
             AppView::Settings => "Application Settings",
         }
     }
@@ -140,6 +144,7 @@ impl Sidebar {
                 AppView::Testing,
                 AppView::Playlist,
                 AppView::DmxMap,
+                AppView::LightGroups,
                 AppView::Settings,
             ];
             

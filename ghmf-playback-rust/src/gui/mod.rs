@@ -7,6 +7,7 @@ mod command_panel;
 mod theme;
 mod sidebar;
 mod dmx_map_panel;
+mod light_group_panel;
 
 pub use app::PlaybackApp;
 pub use sidebar::{AppView, Sidebar};

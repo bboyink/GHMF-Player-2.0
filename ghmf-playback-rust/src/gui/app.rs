@@ -1,4 +1,4 @@
-use super::{playback_panel, lighting_panel, status_panel, settings_dialog, command_panel, theme, sidebar, dmx_map_panel};
+use super::{playback_panel, lighting_panel, status_panel, settings_dialog, command_panel, theme, sidebar, dmx_map_panel, light_group_panel};
 use crate::audio::AudioPlayer;
 use crate::dmx::{EnttecDmxPro, DmxUniverse};
 use crate::plc::{PlcClient, PlcStatus};
@@ -63,6 +63,9 @@ pub struct PlaybackApp {
     
     // DMX Mapper
     dmx_map_panel: dmx_map_panel::DmxMapPanel,
+    
+    // Light Group Mapper
+    light_group_panel: light_group_panel::LightGroupPanel,
 }
 
 
@@ -99,6 +102,7 @@ impl Default for PlaybackApp {
             last_command_time: 0,
             recent_commands: Vec::new(),
             dmx_map_panel: dmx_map_panel::DmxMapPanel::new(),
+            light_group_panel: light_group_panel::LightGroupPanel::new(),
         }
     }
 }
@@ -906,6 +910,9 @@ impl eframe::App for PlaybackApp {
                 }
                 sidebar::AppView::DmxMap => {
                     self.dmx_map_panel.show(ctx, ui);
+                }
+                sidebar::AppView::LightGroups => {
+                    self.light_group_panel.show(ctx, ui);
                 }
                 sidebar::AppView::Settings => {
                     self.show_settings_view(ctx, ui);
