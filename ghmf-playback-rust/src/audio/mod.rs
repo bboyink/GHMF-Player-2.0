@@ -14,6 +14,9 @@ pub enum AudioError {
     #[error("Failed to decode audio file: {0}")]
     DecodeError(String),
     
+    #[error("Decoder error: {0}")]
+    DecoderError(String),
+    
     #[error("File not found: {0}")]
     FileNotFound(String),
     

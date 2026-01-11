@@ -21,10 +21,46 @@ pub struct Settings {
     pub plc_port: u16,
     pub plc_port_name: Option<String>,
     pub last_playlist: Option<String>,
+    #[serde(default = "default_production_folder")]
+    pub production_folder: String,
+    #[serde(default = "default_testing_folder")]
+    pub testing_folder: String,
+    #[serde(default = "default_events_folder")]
+    pub events_folder: String,
+    #[serde(default = "default_drone_folder")]
+    pub drone_folder: String,
+    #[serde(default = "default_open_close_folder")]
+    pub open_close_folder: String,
+    #[serde(default = "default_playlist_folder")]
+    pub playlist_folder: String,
 }
 
 fn default_use_rgbw() -> bool {
     true
+}
+
+fn default_production_folder() -> String {
+    "~/Production".to_string()
+}
+
+fn default_testing_folder() -> String {
+    "~/Testing".to_string()
+}
+
+fn default_events_folder() -> String {
+    "~/Events".to_string()
+}
+
+fn default_drone_folder() -> String {
+    "~/Drone".to_string()
+}
+
+fn default_open_close_folder() -> String {
+    "~/Open-Close".to_string()
+}
+
+fn default_playlist_folder() -> String {
+    "~/Playlists".to_string()
 }
 
 impl Default for Settings {
@@ -39,6 +75,12 @@ impl Default for Settings {
             plc_port: 444,
             plc_port_name: None,
             last_playlist: None,
+            production_folder: default_production_folder(),
+            testing_folder: default_testing_folder(),
+            events_folder: default_events_folder(),
+            drone_folder: default_drone_folder(),
+            open_close_folder: default_open_close_folder(),
+            playlist_folder: default_playlist_folder(),
         }
     }
 }

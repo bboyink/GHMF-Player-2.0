@@ -36,8 +36,9 @@ pub fn show(ui: &mut Ui, message: &str, status_type: StatusType, status_time: In
         ui.label(RichText::new(if dmx_connected { "Connected" } else { "Disconnected" })
             .color(dmx_color)
             .size(11.0));
-        ui.label(RichText::new(format!("Mode: {}", if use_rgbw { "RGBW" } else { "RGB" }))
-            .color(theme::AppColors::TEXT_DISABLED)
+        ui.label(RichText::new("Lights Mode:").color(theme::AppColors::TEXT_SECONDARY).size(11.0));
+        ui.label(RichText::new(if use_rgbw { "RGBW" } else { "RGB" })
+            .color(theme::AppColors::SUCCESS)
             .size(11.0));
         
         ui.add_space(15.0);

@@ -24,7 +24,7 @@ fn main() -> Result<()> {
     // Launch GUI
     let native_options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
-            .with_inner_size([1290.0, 850.0])
+            .with_inner_size([1290.0, 975.0])
             .with_min_inner_size([800.0, 600.0])
             .with_title("GHMF Playback 2.0"),
         ..Default::default()
@@ -44,5 +44,6 @@ fn main() -> Result<()> {
         }
     }
 }
+
 
 

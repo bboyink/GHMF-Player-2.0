@@ -1,4 +1,4 @@
-use super::{playback_panel, lighting_panel, status_panel, settings_dialog, command_panel, theme, sidebar, dmx_map_panel, light_group_panel, legacy_color_panel};
+use super::{playback_panel, lighting_panel, status_panel, settings_dialog, command_panel, theme, sidebar, dmx_map_panel, light_group_panel, legacy_color_panel, playlist_panel};
 use crate::audio::AudioPlayer;
 use crate::dmx::{EnttecDmxPro, DmxUniverse};
 use crate::plc::{PlcClient, PlcStatus};
@@ -46,6 +46,7 @@ pub struct PlaybackApp {
     
     // PLC state
     plc_status: PlcStatus,
+    plc_last_status_check: Instant,
     
     // Volume
     master_volume: f32,
@@ -69,6 +70,12 @@ pub struct PlaybackApp {
     
     // Legacy Color Mapper
     legacy_color_panel: legacy_color_panel::LegacyColorPanel,
+    
+    // Playlist Panel
+    playlist_panel: playlist_panel::PlaylistPanel,
+    
+    // File dialog result channel
+    folder_dialog_rx: Option<std::sync::mpsc::Receiver<(String, String)>>, // (folder_type, path)
 }
 
 
@@ -90,6 +97,7 @@ impl Default for PlaybackApp {
             dmx_connected: false,
             dmx_last_update: Instant::now(),
             plc_status: PlcStatus::Disabled,
+            plc_last_status_check: Instant::now(),
             master_volume: 0.8,
             status_message: "Ready".to_string(),
             status_type: StatusType::Info,
@@ -107,6 +115,8 @@ impl Default for PlaybackApp {
             dmx_map_panel: dmx_map_panel::DmxMapPanel::new(),
             light_group_panel: light_group_panel::LightGroupPanel::new(),
             legacy_color_panel: legacy_color_panel::LegacyColorPanel::default(),
+            playlist_panel: playlist_panel::PlaylistPanel::new(),
+            folder_dialog_rx: None,
         }
     }
 }
@@ -238,9 +248,11 @@ impl PlaybackApp {
             });
             
             self.plc_client = Some(plc_arc);
+            self.plc_status = PlcStatus::Disconnected; // Will update to Connected once connection succeeds
             self.set_status("PLC client initialized", StatusType::Info);
         } else {
             self.plc_client = Some(Arc::new(plc));
+            self.plc_status = PlcStatus::Disabled;
             self.set_status("PLC disabled in settings", StatusType::Info);
         }
     }
@@ -290,6 +302,42 @@ impl PlaybackApp {
                     let _ = dmx.send_dmx();
                     self.dmx_last_update = Instant::now();
                 }
+            }
+        }
+    }
+    
+    fn update_plc_status(&mut self) {
+        // Only check status every 500ms to avoid overhead
+        if self.plc_last_status_check.elapsed() < Duration::from_millis(500) {
+            return;
+        }
+        
+        self.plc_last_status_check = Instant::now();
+        
+        if let Some(plc) = &self.plc_client {
+            let plc_clone = Arc::clone(plc);
+            
+            // Spawn a quick thread to get status without blocking UI
+            let (tx, rx) = std::sync::mpsc::channel();
+            std::thread::spawn(move || {
+                let rt = tokio::runtime::Builder::new_current_thread()
+                    .enable_all()
+                    .build()
+                    .unwrap();
+                
+                let status = rt.block_on(async {
+                    plc_clone.status().await
+                });
+                
+                let _ = tx.send(status);
+            });
+            
+            // Give it a tiny bit of time to respond (1ms)
+            std::thread::sleep(Duration::from_millis(1));
+            
+            // Try to receive the status
+            if let Ok(status) = rx.try_recv() {
+                self.plc_status = status;
             }
         }
     }
@@ -672,46 +720,20 @@ impl PlaybackApp {
     }
     
     fn show_playlist_view(&mut self, _ctx: &Context, ui: &mut egui::Ui) {
-        // Playlist manager - coming soon
-        ui.vertical_centered(|ui| {
-            ui.add_space(50.0);
-            ui.heading(
-                egui::RichText::new("Playlist Manager")
-                    .size(28.0)
-                    .color(theme::AppColors::CYAN)
-            );
+        egui::ScrollArea::vertical().show(ui, |ui| {
             ui.add_space(20.0);
-            ui.label(
-                egui::RichText::new("Create and manage playlists for automated shows")
-                    .size(16.0)
-                    .color(theme::AppColors::TEXT_SECONDARY)
-            );
-            ui.add_space(40.0);
             
-            egui::Frame::none()
-                .fill(theme::AppColors::SURFACE)
-                .rounding(12.0)
-                .inner_margin(40.0)
-                .show(ui, |ui| {
-                    ui.vertical_centered(|ui| {
-                        ui.label(
-                            egui::RichText::new("🚧")
-                                .size(64.0)
-                        );
-                        ui.add_space(20.0);
-                        ui.label(
-                            egui::RichText::new("Coming Soon")
-                                .size(20.0)
-                                .color(theme::AppColors::WARNING)
-                        );
-                        ui.add_space(10.0);
-                        ui.label(
-                            egui::RichText::new("This feature is under development")
-                                .size(14.0)
-                                .color(theme::AppColors::TEXT_SECONDARY)
-                        );
-                    });
-                });
+            self.playlist_panel.show(
+                ui,
+                &self.settings.production_folder,
+                &self.settings.testing_folder,
+                &self.settings.events_folder,
+                &self.settings.drone_folder,
+                &self.settings.open_close_folder,
+                &self.settings.playlist_folder
+            );
+            
+            ui.add_space(20.0);
         });
     }
     
@@ -850,6 +872,232 @@ impl PlaybackApp {
                             .size(13.0)
                             .color(theme::AppColors::TEXT_SECONDARY)
                     );
+                    
+                    ui.add_space(15.0);
+                    
+                    // Test button
+                    let test_button = egui::Button::new(
+                        egui::RichText::new("🧪 Test PLC (099-000)")
+                            .size(14.0)
+                            .color(Color32::WHITE)
+                    )
+                    .fill(theme::AppColors::CYAN)
+                    .min_size(Vec2::new(180.0, 36.0))
+                    .rounding(8.0);
+                    
+                    if ui.add(test_button).clicked() {
+                        if let Some(plc) = &self.plc_client {
+                            plc.queue_command_sync("099-000".to_string());
+                            self.set_status("Test command 099-000 sent to PLC", StatusType::Info);
+                        } else {
+                            self.set_status("PLC not initialized", StatusType::Warning);
+                        }
+                    }
+                });
+            
+            ui.add_space(20.0);
+            
+            // Folder Paths Settings Card
+            egui::Frame::none()
+                .fill(theme::AppColors::SURFACE)
+                .stroke(Stroke::new(1.0, theme::AppColors::SURFACE_LIGHT))
+                .rounding(12.0)
+                .inner_margin(24.0)
+                .show(ui, |ui| {
+                    ui.label(
+                        egui::RichText::new("Folder Paths")
+                            .size(20.0)
+                            .strong()
+                            .color(theme::AppColors::CYAN)
+                    );
+                    ui.add_space(10.0);
+                    ui.add(egui::Separator::default().spacing(0.0));
+                    ui.add_space(15.0);
+                    
+                    ui.label(
+                        egui::RichText::new("Production Folder:")
+                            .size(14.0)
+                            .color(Color32::WHITE)
+                    );
+                    ui.add_space(5.0);
+                    ui.horizontal(|ui| {
+                        ui.add_sized([300.0, 24.0], 
+                            egui::TextEdit::singleline(&mut self.settings.production_folder));
+                        let folder_btn = egui::Button::new(egui::RichText::new("📁").size(16.0))
+                            .min_size(egui::Vec2::new(24.0, 24.0))
+                            .frame(false)
+                            .fill(Color32::TRANSPARENT);
+                        if ui.add(folder_btn).clicked() {
+                            let current_dir = self.settings.production_folder.clone();
+                            let (tx, rx) = std::sync::mpsc::channel();
+                            self.folder_dialog_rx = Some(rx);
+                            let ctx = ui.ctx().clone();
+                            std::thread::spawn(move || {
+                                if let Some(path) = rfd::FileDialog::new()
+                                    .set_directory(&current_dir)
+                                    .pick_folder() {
+                                    let _ = tx.send(("production".to_string(), path.display().to_string()));
+                                    ctx.request_repaint();
+                                }
+                            });
+                        }
+                    });
+                    ui.add_space(15.0);
+                    
+                    ui.label(
+                        egui::RichText::new("Testing Folder:")
+                            .size(14.0)
+                            .color(Color32::WHITE)
+                    );
+                    ui.add_space(5.0);
+                    ui.horizontal(|ui| {
+                        ui.add_sized([300.0, 24.0], 
+                            egui::TextEdit::singleline(&mut self.settings.testing_folder));
+                        let folder_btn = egui::Button::new(egui::RichText::new("📁").size(16.0))
+                            .min_size(egui::Vec2::new(24.0, 24.0))
+                            .frame(false)
+                            .fill(Color32::TRANSPARENT);
+                        if ui.add(folder_btn).clicked() {
+                            let current_dir = self.settings.testing_folder.clone();
+                            let (tx, rx) = std::sync::mpsc::channel();
+                            self.folder_dialog_rx = Some(rx);
+                            let ctx = ui.ctx().clone();
+                            std::thread::spawn(move || {
+                                if let Some(path) = rfd::FileDialog::new()
+                                    .set_directory(&current_dir)
+                                    .pick_folder() {
+                                    let _ = tx.send(("testing".to_string(), path.display().to_string()));
+                                    ctx.request_repaint();
+                                }
+                            });
+                        }
+                    });
+                    ui.add_space(15.0);
+                    
+                    ui.label(
+                        egui::RichText::new("Events Folder:")
+                            .size(14.0)
+                            .color(Color32::WHITE)
+                    );
+                    ui.add_space(5.0);
+                    ui.horizontal(|ui| {
+                        ui.add_sized([300.0, 24.0], 
+                            egui::TextEdit::singleline(&mut self.settings.events_folder));
+                        let folder_btn = egui::Button::new(egui::RichText::new("📁").size(16.0))
+                            .min_size(egui::Vec2::new(24.0, 24.0))
+                            .frame(false)
+                            .fill(Color32::TRANSPARENT);
+                        if ui.add(folder_btn).clicked() {
+                            let current_dir = self.settings.events_folder.clone();
+                            let (tx, rx) = std::sync::mpsc::channel();
+                            self.folder_dialog_rx = Some(rx);
+                            let ctx = ui.ctx().clone();
+                            std::thread::spawn(move || {
+                                if let Some(path) = rfd::FileDialog::new()
+                                    .set_directory(&current_dir)
+                                    .pick_folder() {
+                                    let _ = tx.send(("events".to_string(), path.display().to_string()));
+                                    ctx.request_repaint();
+                                }
+                            });
+                        }
+                    });
+                    ui.add_space(15.0);
+                    
+                    ui.label(
+                        egui::RichText::new("Drone Folder:")
+                            .size(14.0)
+                            .color(Color32::WHITE)
+                    );
+                    ui.add_space(5.0);
+                    ui.horizontal(|ui| {
+                        ui.add_sized([300.0, 24.0], 
+                            egui::TextEdit::singleline(&mut self.settings.drone_folder));
+                        let folder_btn = egui::Button::new(egui::RichText::new("📁").size(16.0))
+                            .min_size(egui::Vec2::new(24.0, 24.0))
+                            .frame(false)
+                            .fill(Color32::TRANSPARENT);
+                        if ui.add(folder_btn).clicked() {
+                            let current_dir = self.settings.drone_folder.clone();
+                            let (tx, rx) = std::sync::mpsc::channel();
+                            self.folder_dialog_rx = Some(rx);
+                            let ctx = ui.ctx().clone();
+                            std::thread::spawn(move || {
+                                if let Some(path) = rfd::FileDialog::new()
+                                    .set_directory(&current_dir)
+                                    .pick_folder() {
+                                    let _ = tx.send(("drone".to_string(), path.display().to_string()));
+                                    ctx.request_repaint();
+                                }
+                            });
+                        }
+                    });
+                    ui.add_space(15.0);
+                    
+                    ui.label(
+                        egui::RichText::new("Open-Close Folder:")
+                            .size(14.0)
+                            .color(Color32::WHITE)
+                    );
+                    ui.add_space(5.0);
+                    ui.horizontal(|ui| {
+                        ui.add_sized([300.0, 24.0], 
+                            egui::TextEdit::singleline(&mut self.settings.open_close_folder));
+                        let folder_btn = egui::Button::new(egui::RichText::new("📁").size(16.0))
+                            .min_size(egui::Vec2::new(24.0, 24.0))
+                            .frame(false)
+                            .fill(Color32::TRANSPARENT);
+                        if ui.add(folder_btn).clicked() {
+                            let current_dir = self.settings.open_close_folder.clone();
+                            let (tx, rx) = std::sync::mpsc::channel();
+                            self.folder_dialog_rx = Some(rx);
+                            let ctx = ui.ctx().clone();
+                            std::thread::spawn(move || {
+                                if let Some(path) = rfd::FileDialog::new()
+                                    .set_directory(&current_dir)
+                                    .pick_folder() {
+                                    let _ = tx.send(("open_close".to_string(), path.display().to_string()));
+                                    ctx.request_repaint();
+                                }
+                            });
+                        }
+                    });
+                    ui.add_space(15.0);
+                    
+                    ui.label(
+                        egui::RichText::new("Playlist Folder:")
+                            .size(14.0)
+                            .color(Color32::WHITE)
+                    );
+                    ui.add_space(5.0);
+                    ui.horizontal(|ui| {
+                        ui.add_sized([300.0, 24.0], 
+                            egui::TextEdit::singleline(&mut self.settings.playlist_folder));
+                        let folder_btn = egui::Button::new(egui::RichText::new("📁").size(16.0))
+                            .min_size(egui::Vec2::new(24.0, 24.0))
+                            .frame(false)
+                            .fill(Color32::TRANSPARENT);
+                        if ui.add(folder_btn).clicked() {
+                            let current_dir = self.settings.playlist_folder.clone();
+                            let (tx, rx) = std::sync::mpsc::channel();
+                            self.folder_dialog_rx = Some(rx);
+                            let ctx = ui.ctx().clone();
+                            std::thread::spawn(move || {
+                                if let Some(path) = rfd::FileDialog::new()
+                                    .set_directory(&current_dir)
+                                    .pick_folder() {
+                                    let _ = tx.send(("playlist".to_string(), path.display().to_string()));
+                                    ctx.request_repaint();
+                                }
+                            });
+                        }
+                    });
+                    ui.add_space(8.0);
+                    ui.label(
+                        egui::RichText::new("Paths for show files and configurations")
+                            .size(13.0)
+                            .color(theme::AppColors::TEXT_SECONDARY)
+                    );
                 });
             
             ui.add_space(30.0);
@@ -908,9 +1156,26 @@ impl eframe::App for PlaybackApp {
         // Apply theme
         theme::configure_theme(ctx);
         
+        // Check for folder dialog results
+        if let Some(rx) = &self.folder_dialog_rx {
+            if let Ok((folder_type, path)) = rx.try_recv() {
+                match folder_type.as_str() {
+                    "production" => self.settings.production_folder = path,
+                    "testing" => self.settings.testing_folder = path,
+                    "events" => self.settings.events_folder = path,
+                    "drone" => self.settings.drone_folder = path,
+                    "open_close" => self.settings.open_close_folder = path,
+                    "playlist" => self.settings.playlist_folder = path,
+                    _ => {}
+                }
+                self.folder_dialog_rx = None;
+            }
+        }
+        
         // Update state
         self.update_playback_state();
         self.update_dmx_state();
+        self.update_plc_status();
         
         // Bottom status bar with dark background
         TopBottomPanel::bottom("status_bar")
