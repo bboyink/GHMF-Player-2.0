@@ -11,6 +11,7 @@ pub enum AppView {
     SettingsDmxMap,
     SettingsLightGroups,
     SettingsLegacyColor,
+    SettingsStartTime,
     SettingsApp,
 }
 
@@ -24,6 +25,7 @@ impl AppView {
             AppView::SettingsDmxMap => "◉",      // DMX grid icon
             AppView::SettingsLightGroups => "💡", // Light bulb icon
             AppView::SettingsLegacyColor => "🎨", // Palette icon
+            AppView::SettingsStartTime => "🕐",   // Clock icon
             AppView::SettingsApp => "⚙",    // Settings gear icon
         }
     }
@@ -37,6 +39,7 @@ impl AppView {
             AppView::SettingsDmxMap => "DMX Map",
             AppView::SettingsLightGroups => "Light Groups",
             AppView::SettingsLegacyColor => "Legacy Color",
+            AppView::SettingsStartTime => "Start Time",
             AppView::SettingsApp => "Application",
         }
     }
@@ -50,6 +53,7 @@ impl AppView {
             AppView::SettingsDmxMap => "DMX Mapper - Assign Fixtures to DMX Channels",
             AppView::SettingsLightGroups => "Light Group Mapping - Create FWC Light Groups",
             AppView::SettingsLegacyColor => "Legacy Color Mapping - Map FWC Values to RGB Colors",
+            AppView::SettingsStartTime => "Start Time Configuration - Set Show Date and Time",
             AppView::SettingsApp => "Application Settings",
         }
     }
@@ -65,6 +69,7 @@ pub struct Sidebar {
     dmx_map_icon: Option<Arc<TextureHandle>>,
     sort_down_icon: Option<Arc<TextureHandle>>,
     palette_icon: Option<Arc<TextureHandle>>,
+    clock_icon: Option<Arc<TextureHandle>>,
 }
 
 impl Default for Sidebar {
@@ -79,6 +84,7 @@ impl Default for Sidebar {
             dmx_map_icon: None,
             sort_down_icon: None,
             palette_icon: None,
+            clock_icon: None,
         }
     }
 }
@@ -205,6 +211,25 @@ impl Sidebar {
                 self.sort_down_icon = Some(Arc::new(texture));
             }
         }
+
+        // Load Clock icon
+        if self.clock_icon.is_none() {
+            let icon_bytes = include_bytes!("../../assets/clock.png");
+            if let Ok(image) = image::load_from_memory(icon_bytes) {
+                let size = [image.width() as _, image.height() as _];
+                let image_buffer = image.to_rgba8();
+                let pixels = image_buffer.as_flat_samples();
+                let color_image = ColorImage::from_rgba_unmultiplied(size, pixels.as_slice());
+                
+                let texture = ctx.load_texture(
+                    "clock_icon",
+                    color_image,
+                    Default::default()
+                );
+                
+                self.clock_icon = Some(Arc::new(texture));
+            }
+        }
     }
 
     pub fn show(&mut self, ctx: &Context, ui: &mut Ui) -> Option<AppView> {
@@ -281,6 +306,7 @@ impl Sidebar {
                     AppView::SettingsDmxMap,
                     AppView::SettingsLightGroups,
                     AppView::SettingsLegacyColor,
+                    AppView::SettingsStartTime,
                     AppView::SettingsApp,
                 ];
                 
@@ -583,6 +609,28 @@ impl Sidebar {
             }
             AppView::SettingsApp => {
                 if let Some(icon) = &self.app_settings_icon {
+                    let icon_rect = Rect::from_center_size(
+                        icon_pos,
+                        Vec2::new(icon_size, icon_size)
+                    );
+                    ui.painter().image(
+                        icon.id(),
+                        icon_rect,
+                        Rect::from_min_max(Pos2::ZERO, Pos2::new(1.0, 1.0)),
+                        Color32::WHITE
+                    );
+                } else {
+                    ui.painter().text(
+                        icon_pos,
+                        egui::Align2::LEFT_CENTER,
+                        view.icon(),
+                        FontId::new(icon_size, FontFamily::Proportional),
+                        text_color
+                    );
+                }
+            }
+            AppView::SettingsStartTime => {
+                if let Some(icon) = &self.clock_icon {
                     let icon_rect = Rect::from_center_size(
                         icon_pos,
                         Vec2::new(icon_size, icon_size)

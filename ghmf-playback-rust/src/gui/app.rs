@@ -1,4 +1,4 @@
-use super::{playback_panel, lighting_panel, status_panel, settings_dialog, command_panel, theme, sidebar, dmx_map_panel, light_group_panel, legacy_color_panel, playlist_panel};
+use super::{playback_panel, lighting_panel, status_panel, settings_dialog, command_panel, theme, sidebar, dmx_map_panel, light_group_panel, legacy_color_panel, playlist_panel, start_time_panel};
 use crate::audio::AudioPlayer;
 use crate::dmx::{EnttecDmxPro, DmxUniverse};
 use crate::plc::{PlcClient, PlcStatus};
@@ -71,6 +71,9 @@ pub struct PlaybackApp {
     // Legacy Color Mapper
     legacy_color_panel: legacy_color_panel::LegacyColorPanel,
     
+    // Start Time Panel
+    start_time_panel: start_time_panel::StartTimePanel,
+    
     // Playlist Panel
     playlist_panel: playlist_panel::PlaylistPanel,
     
@@ -115,6 +118,7 @@ impl Default for PlaybackApp {
             dmx_map_panel: dmx_map_panel::DmxMapPanel::new(),
             light_group_panel: light_group_panel::LightGroupPanel::new(),
             legacy_color_panel: legacy_color_panel::LegacyColorPanel::default(),
+            start_time_panel: start_time_panel::StartTimePanel::new(),
             playlist_panel: playlist_panel::PlaylistPanel::new(),
             folder_dialog_rx: None,
         }
@@ -1240,6 +1244,9 @@ impl eframe::App for PlaybackApp {
                 }
                 sidebar::AppView::SettingsLegacyColor => {
                     self.legacy_color_panel.show(ctx, ui);
+                }
+                sidebar::AppView::SettingsStartTime => {
+                    self.start_time_panel.show(ctx, ui);
                 }
                 sidebar::AppView::SettingsApp => {
                     self.show_settings_view(ctx, ui);

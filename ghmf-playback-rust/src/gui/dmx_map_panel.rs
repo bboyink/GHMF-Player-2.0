@@ -1,8 +1,9 @@
-use egui::{Context, Ui, Color32, Stroke, Rect, Pos2, Vec2, Sense, Response, Key};
+use egui::{Context, Ui, Color32, Stroke, Rect, Pos2, Vec2, Sense, Response, Key, Frame};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
+use super::theme;
 
 // Constants
 const GRID_COLS: usize = 25;
@@ -231,7 +232,13 @@ impl DmxMapPanel {
     }
 
     pub fn show(&mut self, ctx: &Context, ui: &mut Ui) {
-        ui.heading(egui::RichText::new("DMX Channel Mapper").color(Color32::WHITE));
+        // Header with cyan styling
+        ui.label(
+            egui::RichText::new("DMX Channel Mapper")
+                .size(24.0)
+                .strong()
+                .color(theme::AppColors::CYAN)
+        );
         ui.add_space(10.0);
 
         egui::SidePanel::left("fixture_list_panel")
@@ -266,18 +273,33 @@ impl DmxMapPanel {
     }
 
     fn show_fixture_list(&mut self, ui: &mut Ui) {
-        ui.heading(egui::RichText::new("Fixtures").color(Color32::WHITE));
-        ui.add_space(5.0);
-        ui.label(egui::RichText::new("Click a fixture, then click a channel in the grid to assign it.").color(Color32::WHITE));
-        ui.add_space(10.0);
+        // Fixtures section with styled frame wrapping everything
+        Frame::none()
+            .fill(theme::AppColors::SURFACE)
+            .stroke(Stroke::new(1.0, theme::AppColors::SURFACE_LIGHT))
+            .rounding(12.0)
+            .inner_margin(16.0)
+            .show(ui, |ui| {
+                ui.label(
+                    egui::RichText::new("Available Fixtures")
+                        .size(16.0)
+                        .strong()
+                        .color(theme::AppColors::CYAN)
+                );
+                ui.add_space(8.0);
+                ui.label(
+                    egui::RichText::new("Click a fixture, then click a channel in the grid to assign it")
+                        .color(theme::AppColors::TEXT_SECONDARY)
+                        .size(12.0)
+                );
+                ui.add_space(12.0);
 
-        let available_height = ui.available_height() - 80.0; // Reserve space for button and spacing
+        let available_height = ui.available_height() - 100.0;
 
         egui::ScrollArea::vertical()
             .id_salt("fixture_list_scroll")
             .max_height(available_height)
             .show(ui, |ui| {
-                ui.add_space(0.0);
                 ui.set_max_width(230.0);
                 
                 let fixtures_clone = self.fixtures.clone();
@@ -293,15 +315,11 @@ impl DmxMapPanel {
                     ui.horizontal(|ui| {
                         let text = format!("#{:02} {}", fixture.id, fixture.name);
                         
-                        let bg_color = if is_selected {
-                            Color32::from_rgb(0, 120, 200)
-                        } else if is_assigned {
-                            Color32::from_rgb(0, 144, 81)
+                        let (bg_color, text_color) = if is_selected {
+                            (theme::AppColors::SUCCESS, Color32::BLACK)
                         } else {
-                            Color32::from_rgb(50, 50, 60)
+                            (theme::AppColors::SURFACE_LIGHT, Color32::WHITE)
                         };
-
-                        let text_color = Color32::WHITE;
 
                         // Main fixture button
                         let button_width = if fixture.id > 54 { 180.0 } else { 220.0 };
@@ -354,7 +372,7 @@ impl DmxMapPanel {
                             let delete_button = egui::Button::new(
                                 egui::RichText::new("🗑").size(16.0).color(Color32::WHITE)
                             )
-                            .fill(Color32::from_rgb(180, 50, 50))
+                            .fill(theme::AppColors::ERROR)
                             .min_size(Vec2::new(30.0, 30.0));
 
                             let delete_response = ui.add(delete_button);
@@ -369,37 +387,47 @@ impl DmxMapPanel {
                     });
                 }
             });
-            
-        // Reset hover if not hovering any fixture in the scroll area
-        // (This check needs to happen here while we still have the ui context)
         
-        ui.add_space(10.0);
-        ui.separator();
-        ui.add_space(5.0);
+        ui.add_space(12.0);
         
-        // Add Fixture button
-        if ui.add(egui::Button::new("➕ Add Fixture").min_size(Vec2::new(230.0, 35.0))).clicked() {
+        // Add Fixture button matching PLC test button style
+        let button = egui::Button::new(
+            egui::RichText::new("➕ Add Fixture")
+                .size(14.0)
+                .color(Color32::WHITE)
+        )
+        .fill(theme::AppColors::CYAN)
+        .min_size(Vec2::new(230.0, 36.0))
+        .rounding(8.0);
+        
+        if ui.add(button).clicked() {
             self.show_add_fixture_dialog = true;
             self.new_fixture_name = String::new();
             self.new_fixture_type = FixtureType::Light;
             self.new_light_type = LightType::RGBW;
             self.new_channel_count = "4".to_string();
         }
+            });
     }
 
     fn show_dmx_grid(&mut self, ctx: &Context, ui: &mut Ui) {
-        ui.heading(egui::RichText::new("DMX Universe (512 Channels)").color(Color32::WHITE));
-        ui.add_space(5.0);
+        ui.label(
+            egui::RichText::new("DMX Universe (512 Channels)")
+                .size(18.0)
+                .strong()
+                .color(theme::AppColors::CYAN)
+        );
+        ui.add_space(8.0);
         
         if let Some(fixture) = &self.selected_fixture_to_place {
             ui.label(egui::RichText::new(format!("Selected: #{:02} {} - Click a channel to place", fixture.id, fixture.name))
-                .color(Color32::WHITE));
+                .color(theme::AppColors::TEXT_PRIMARY));
         } else if self.selected_fixture_start.is_some() {
             ui.label(egui::RichText::new("Press DELETE to remove selected fixture")
-                .color(Color32::WHITE));
+                .color(theme::AppColors::WARNING));
         } else {
             ui.label(egui::RichText::new("Click a fixture in the list, then click a channel to place it")
-                .color(Color32::WHITE));
+                .color(theme::AppColors::TEXT_SECONDARY));
         }
         
         ui.add_space(10.0);
@@ -710,12 +738,12 @@ impl DmxMapPanel {
                 ui.add_space(5.0);
                 
                 // Fixture Name
-                ui.label(egui::RichText::new("Fixture Name:").color(Color32::WHITE));
+                ui.label(egui::RichText::new("Fixture Name:").color(theme::AppColors::TEXT_PRIMARY));
                 ui.text_edit_singleline(&mut self.new_fixture_name);
                 ui.add_space(10.0);
                 
                 // Fixture Type
-                ui.label(egui::RichText::new("Type of Fixture:").color(Color32::WHITE));
+                ui.label(egui::RichText::new("Type of Fixture:").color(theme::AppColors::TEXT_PRIMARY));
                 ui.horizontal(|ui| {
                     ui.radio_value(&mut self.new_fixture_type, FixtureType::Light, "Light");
                     ui.radio_value(&mut self.new_fixture_type, FixtureType::Other, "Other");
@@ -724,7 +752,7 @@ impl DmxMapPanel {
                 
                 // Light-specific options
                 if self.new_fixture_type == FixtureType::Light {
-                    ui.label(egui::RichText::new("Light Type:").color(Color32::WHITE));
+                    ui.label(egui::RichText::new("Light Type:").color(theme::AppColors::TEXT_PRIMARY));
                     ui.horizontal(|ui| {
                         if ui.radio_value(&mut self.new_light_type, LightType::RGBW, "RGBW").clicked() {
                             self.new_channel_count = "4".to_string();
@@ -735,7 +763,7 @@ impl DmxMapPanel {
                     });
                 } else {
                     // Other type - manual channel count
-                    ui.label(egui::RichText::new("Number of Channels:").color(Color32::WHITE));
+                    ui.label(egui::RichText::new("Number of Channels:").color(theme::AppColors::TEXT_PRIMARY));
                     ui.add(egui::TextEdit::singleline(&mut self.new_channel_count).desired_width(100.0));
                 }
                 
@@ -783,9 +811,9 @@ impl DmxMapPanel {
             .show(ctx, |ui| {
                 ui.add_space(5.0);
                 
-                ui.label(egui::RichText::new(format!("Are you sure you want to delete '{}'?", fixture_name)).color(Color32::WHITE));
+                ui.label(egui::RichText::new(format!("Are you sure you want to delete '{}'?", fixture_name)).color(theme::AppColors::TEXT_PRIMARY));
                 ui.add_space(10.0);
-                ui.label(egui::RichText::new("This will also remove any channel assignments for this fixture.").color(Color32::WHITE));
+                ui.label(egui::RichText::new("This will also remove any channel assignments for this fixture.").color(theme::AppColors::TEXT_SECONDARY));
                 
                 ui.add_space(15.0);
                 ui.separator();

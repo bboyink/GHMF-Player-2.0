@@ -1,6 +1,7 @@
-use egui::{Context, Ui, Color32, Vec2, Sense};
+use egui::{Context, Ui, Color32, Vec2, Sense, Frame, Stroke};
 use serde::{Deserialize, Serialize};
 use std::path::Path;
+use super::theme;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LegacyColor {
@@ -94,13 +95,35 @@ impl LegacyColorPanel {
     }
 
     pub fn show(&mut self, _ctx: &Context, ui: &mut Ui) {
-        ui.heading(egui::RichText::new("Legacy Color Mapping").color(Color32::WHITE).size(24.0));
+        ui.heading(egui::RichText::new("Legacy Color Mapping").color(theme::AppColors::CYAN).size(24.0));
         ui.add_space(10.0);
-        ui.label("Map FWC values to RGB hex colors for legacy color commands");
-        ui.add_space(20.0);
+
+        // Main content in styled Frame
+        Frame::none()
+            .fill(theme::AppColors::SURFACE)
+            .stroke(Stroke::new(1.0, theme::AppColors::SURFACE_LIGHT))
+            .rounding(12.0)
+            .inner_margin(16.0)
+            .show(ui, |ui| {
+                ui.label(
+                    egui::RichText::new("Color Definitions")
+                        .size(16.0)
+                        .strong()
+                        .color(theme::AppColors::CYAN)
+                );
+                ui.add_space(8.0);
+                ui.label(
+                    egui::RichText::new("Map FWC values to RGB hex colors for legacy color commands")
+                        .color(theme::AppColors::TEXT_SECONDARY)
+                        .size(12.0)
+                );
+                ui.add_space(12.0);
+
+        let available_height = ui.available_height() - 20.0;
 
         egui::ScrollArea::vertical()
             .id_salt("legacy_color_scroll")
+            .max_height(available_height)
             .show(ui, |ui| {
                 // Header
                 egui::Grid::new("legacy_color_grid")
@@ -109,10 +132,10 @@ impl LegacyColorPanel {
                     .min_col_width(80.0)
                     .show(ui, |ui| {
                         // Header row
-                        ui.label(egui::RichText::new("Preview").strong().size(16.0).color(Color32::WHITE));
-                        ui.label(egui::RichText::new("Index").strong().size(16.0).color(Color32::WHITE));
-                        ui.label(egui::RichText::new("Color Name").strong().size(16.0).color(Color32::WHITE));
-                        ui.label(egui::RichText::new("RGB Hex").strong().size(16.0).color(Color32::WHITE));
+                        ui.label(egui::RichText::new("Preview").strong().size(14.0).color(theme::AppColors::CYAN));
+                        ui.label(egui::RichText::new("Index").strong().size(14.0).color(theme::AppColors::CYAN));
+                        ui.label(egui::RichText::new("Color Name").strong().size(14.0).color(theme::AppColors::CYAN));
+                        ui.label(egui::RichText::new("RGB Hex").strong().size(14.0).color(theme::AppColors::CYAN));
                         ui.end_row();
 
                         // Data rows
@@ -142,7 +165,7 @@ impl LegacyColorPanel {
                             );
 
                             // Index
-                            ui.label(egui::RichText::new(format!("{}", color_index)).size(15.0));
+                            ui.label(egui::RichText::new(format!("{}", color_index)).size(15.0).color(theme::AppColors::TEXT_PRIMARY));
 
                             // Color Name - editable
                             if is_editing {
@@ -158,7 +181,7 @@ impl LegacyColorPanel {
                                 }
                             } else {
                                 let response = ui.add(
-                                    egui::Label::new(egui::RichText::new(&color_name).size(15.0))
+                                    egui::Label::new(egui::RichText::new(&color_name).size(15.0).color(theme::AppColors::TEXT_PRIMARY))
                                         .sense(Sense::click())
                                 );
                                 if response.clicked() {
@@ -191,7 +214,7 @@ impl LegacyColorPanel {
                                 });
                             } else {
                                 let response = ui.add(
-                                    egui::Label::new(egui::RichText::new(format!("#{}", color_hex)).size(15.0))
+                                    egui::Label::new(egui::RichText::new(format!("#{}", color_hex)).size(15.0).color(theme::AppColors::TEXT_PRIMARY))
                                         .sense(Sense::click())
                                 );
                                 if response.clicked() {
@@ -204,6 +227,7 @@ impl LegacyColorPanel {
                             ui.end_row();
                         }
                     });
+            });
             });
     }
 }

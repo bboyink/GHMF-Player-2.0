@@ -1,7 +1,8 @@
-use egui::{Context, Ui, Color32, Stroke, Rect, Pos2, Vec2, Sense};
+use egui::{Context, Ui, Color32, Stroke, Rect, Pos2, Vec2, Sense, Frame};
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::Path;
+use super::theme;
 
 // Structure from DMX mapping file
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -134,24 +135,30 @@ impl LightGroupPanel {
     }
     
     pub fn show(&mut self, _ctx: &Context, ui: &mut Ui) {
-        ui.heading(egui::RichText::new("Light Group Mapping").color(Color32::WHITE).size(24.0));
+        // Header with cyan styling matching playlist panel
+        ui.label(
+            egui::RichText::new("Light Group Mapping")
+                .size(24.0)
+                .strong()
+                .color(theme::AppColors::CYAN)
+        );
         ui.add_space(10.0);
         
         // Show messages
         if let Some(ref msg) = self.error_message {
-            ui.colored_label(Color32::from_rgb(239, 68, 68), msg);
+            ui.colored_label(theme::AppColors::ERROR, msg);
             ui.add_space(10.0);
         }
         
         if let Some(ref msg) = self.success_message {
-            ui.colored_label(Color32::from_rgb(0, 255, 136), msg);
+            ui.colored_label(theme::AppColors::SUCCESS, msg);
             ui.add_space(10.0);
         }
         
         // Main content area using panels like DMX mapper
         egui::SidePanel::left("fixture_list_panel")
             .resizable(false)
-            .exact_width(280.0)
+            .exact_width(295.0)
             .show_inside(ui, |ui| {
                 self.show_form_and_fixtures(ui);
             });
@@ -162,34 +169,62 @@ impl LightGroupPanel {
     }
     
     fn show_form_and_fixtures(&mut self, ui: &mut Ui) {
-        // Form fields at top
-        ui.add_space(10.0);
-        ui.label(egui::RichText::new("Group Name").color(Color32::WHITE));
-        ui.text_edit_singleline(&mut self.group_name);
-        ui.add_space(10.0);
-        
-        ui.horizontal(|ui| {
-            ui.vertical(|ui| {
-                ui.label(egui::RichText::new("FWC").color(Color32::WHITE));
-                ui.add(egui::TextEdit::singleline(&mut self.fcw_code).desired_width(100.0));
+        // Form fields section with styled frame
+        Frame::none()
+            .fill(theme::AppColors::SURFACE)
+            .stroke(Stroke::new(1.0, theme::AppColors::SURFACE_LIGHT))
+            .rounding(12.0)
+            .inner_margin(16.0)
+            .show(ui, |ui| {
+                ui.label(
+                    egui::RichText::new("Create Light Group")
+                        .size(16.0)
+                        .strong()
+                        .color(theme::AppColors::CYAN)
+                );
+                ui.add_space(12.0);
+                
+                ui.label(egui::RichText::new("Group Name").color(theme::AppColors::TEXT_PRIMARY));
+                ui.text_edit_singleline(&mut self.group_name);
+                ui.add_space(10.0);
+                
+                ui.horizontal(|ui| {
+                    ui.vertical(|ui| {
+                        ui.label(egui::RichText::new("FWC Code").color(theme::AppColors::TEXT_PRIMARY));
+                        ui.add(egui::TextEdit::singleline(&mut self.fcw_code).desired_width(100.0));
+                    });
+                    ui.add_space(10.0);
+                    ui.vertical(|ui| {
+                        ui.label(egui::RichText::new("Fade Code").color(theme::AppColors::TEXT_PRIMARY));
+                        ui.add(egui::TextEdit::singleline(&mut self.fcw_fade_code).desired_width(100.0));
+                    });
+                });
             });
-            ui.add_space(10.0);
-            ui.vertical(|ui| {
-                ui.label(egui::RichText::new("Fade Code").color(Color32::WHITE));
-                ui.add(egui::TextEdit::singleline(&mut self.fcw_fade_code).desired_width(100.0));
-            });
-        });
         
-        ui.add_space(15.0);
-        ui.separator();
-        ui.add_space(10.0);
+        ui.add_space(16.0);
         
-        ui.heading(egui::RichText::new("Available Fixtures").color(Color32::WHITE));
-        ui.add_space(5.0);
-        ui.label(egui::RichText::new("Click fixtures to select/deselect them for the group.").color(Color32::WHITE));
-        ui.add_space(10.0);
+        // Available fixtures section with styled frame
+        Frame::none()
+            .fill(theme::AppColors::SURFACE)
+            .stroke(Stroke::new(1.0, theme::AppColors::SURFACE_LIGHT))
+            .rounding(12.0)
+            .inner_margin(16.0)
+            .show(ui, |ui| {
+                ui.label(
+                    egui::RichText::new("Available Fixtures")
+                        .size(16.0)
+                        .strong()
+                        .color(theme::AppColors::CYAN)
+                );
+                ui.add_space(8.0);
+                ui.label(
+                    egui::RichText::new("Click fixtures to add them to the group")
+                        .color(theme::AppColors::TEXT_SECONDARY)
+                        .size(12.0)
+                );
+                ui.add_space(12.0);
         
-        let available_height = ui.available_height() - 80.0;
+        let available_height = ui.available_height() - 100.0;
         
         egui::ScrollArea::vertical()
             .id_salt("fixture_selection_scroll")
@@ -205,9 +240,9 @@ impl LightGroupPanel {
                     let text = format!("#{:02} {}", fixture.id, fixture.name);
                     let button_width = 250.0;
                     let bg_color = if is_selected {
-                        Color32::from_rgb(0, 144, 81) // Green when selected
+                        theme::AppColors::SUCCESS // Cyan/Green when selected
                     } else {
-                        Color32::from_rgb(50, 50, 60) // Gray when not selected
+                        theme::AppColors::SURFACE_LIGHT // Gray when not selected
                     };
                     
                     ui.push_id(format!("fixture_{}", fixture.id), |ui| {
@@ -228,7 +263,7 @@ impl LightGroupPanel {
                                 egui::Align2::LEFT_CENTER,
                                 &text,
                                 egui::FontId::default(),
-                                Color32::WHITE,
+                                theme::AppColors::TEXT_PRIMARY,
                             );
                             
                             response
@@ -248,33 +283,52 @@ impl LightGroupPanel {
                 }
             });
         
-        ui.add_space(10.0);
-        ui.separator();
-        ui.add_space(5.0);
+        ui.add_space(12.0);
         
-        // Create Group button matching DMX mapping style
+        // Create Group button matching PLC test button style
+        let button_text = if self.editing_group_index.is_some() {
+            "💾 Update Group"
+        } else {
+            "➕ Create Group"
+        };
+        
         let button = egui::Button::new(
-            egui::RichText::new("+ Create Group")
-                .color(Color32::WHITE)
+            egui::RichText::new(button_text)
                 .size(14.0)
+                .color(Color32::WHITE)
         )
-        .fill(Color32::from_rgb(50, 50, 60))
-        .min_size(Vec2::new(250.0, 32.0));
+        .fill(theme::AppColors::CYAN)
+        .min_size(Vec2::new(265.0, 36.0))
+        .rounding(8.0);
         
         if ui.add(button).clicked() {
             self.create_group();
         }
+            });
     }
     
     fn show_group_cards(&mut self, ui: &mut Ui) {
-        ui.heading(egui::RichText::new("Created Groups").color(Color32::WHITE));
-        ui.add_space(10.0);
+        ui.label(
+            egui::RichText::new("Created Groups")
+                .size(18.0)
+                .strong()
+                .color(theme::AppColors::CYAN)
+        );
+        ui.add_space(12.0);
         
         if self.config.groups.is_empty() {
-            ui.label(
-                egui::RichText::new("No groups created yet")
-                    .color(Color32::from_rgb(100, 116, 139))
-            );
+            Frame::none()
+                .fill(theme::AppColors::SURFACE)
+                .stroke(Stroke::new(1.0, theme::AppColors::SURFACE_LIGHT))
+                .rounding(12.0)
+                .inner_margin(32.0)
+                .show(ui, |ui| {
+                    ui.label(
+                        egui::RichText::new("No groups created yet")
+                            .color(theme::AppColors::TEXT_DISABLED)
+                            .size(14.0)
+                    );
+                });
             return;
         }
         
@@ -292,14 +346,16 @@ impl LightGroupPanel {
                         let is_editing = editing_index == Some(group_idx);
                         
                         let card_bg = if is_editing {
-                            Color32::from_rgb(0, 120, 200)
+                            theme::AppColors::PRIMARY_DARK
                         } else {
-                            Color32::from_rgb(30, 41, 59)
+                            theme::AppColors::SURFACE
                         };
                         
-                        egui::Frame::none()
+                        Frame::none()
                             .fill(card_bg)
-                            .inner_margin(egui::Margin::symmetric(15.0, 10.0))
+                            .stroke(Stroke::new(1.0, theme::AppColors::SURFACE_LIGHT))
+                            .rounding(12.0)
+                            .inner_margin(16.0)
                             .show(ui, |ui| {
                                 // First line: Title and buttons
                                 ui.horizontal(|ui| {
@@ -311,29 +367,29 @@ impl LightGroupPanel {
                                     
                                     ui.label(
                                         egui::RichText::new(title)
-                                            .color(Color32::WHITE)
-                                            .size(22.0)
+                                            .color(theme::AppColors::TEXT_PRIMARY)
+                                            .size(18.0)
                                             .strong()
                                     );
                                     
                                     // Buttons on the right - icon-only, no border
                                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                                        let edit_label = ui.add(
-                                            egui::Label::new(egui::RichText::new("✏").size(16.0).color(Color32::WHITE))
-                                                .sense(egui::Sense::click())
-                                        );
-                                        if edit_label.clicked() {
-                                            self.load_group_for_editing(group_idx);
-                                        }
-                                        
-                                        ui.add_space(8.0);
-                                        
                                         let delete_label = ui.add(
-                                            egui::Label::new(egui::RichText::new("🗑").size(16.0).color(Color32::WHITE))
+                                            egui::Label::new(egui::RichText::new("🗑").size(18.0).color(theme::AppColors::ERROR))
                                                 .sense(egui::Sense::click())
                                         );
                                         if delete_label.clicked() {
                                             groups_to_delete.push(group_idx);
+                                        }
+                                        
+                                        ui.add_space(12.0);
+                                        
+                                        let edit_label = ui.add(
+                                            egui::Label::new(egui::RichText::new("✏").size(18.0).color(theme::AppColors::CYAN))
+                                                .sense(egui::Sense::click())
+                                        );
+                                        if edit_label.clicked() {
+                                            self.load_group_for_editing(group_idx);
                                         }
                                     });
                                 });
@@ -353,7 +409,7 @@ impl LightGroupPanel {
                                                 let text = format!("#{} {}", fixture_id, fixture.name);
                                                 ui.label(
                                                     egui::RichText::new(text)
-                                                        .color(Color32::from_rgb(203, 213, 225))
+                                                        .color(theme::AppColors::TEXT_SECONDARY)
                                                         .size(13.0)
                                                 );
                                             }

@@ -10,6 +10,7 @@ mod dmx_map_panel;
 mod light_group_panel;
 mod legacy_color_panel;
 mod playlist_panel;
+mod start_time_panel;
 
 pub use app::PlaybackApp;
 pub use sidebar::{AppView, Sidebar};
