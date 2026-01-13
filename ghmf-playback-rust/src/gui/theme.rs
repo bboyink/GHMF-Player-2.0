@@ -31,6 +31,7 @@ impl AppColors {
     pub const WARNING: Color32 = Color32::from_rgb(255, 193, 7);      // #ffc107
     pub const SUCCESS: Color32 = Color32::from_rgb(0, 255, 136);      // #00ff88
     pub const INFO: Color32 = Color32::from_rgb(0, 198, 255);         // #00c6ff
+    pub const YELLOW: Color32 = Color32::from_rgb(255, 220, 90);      // #ffdc5a
     
     pub const DMX_ACTIVE: Color32 = Color32::from_rgb(0, 255, 136);
     pub const DMX_INACTIVE: Color32 = Color32::from_rgb(239, 68, 68);

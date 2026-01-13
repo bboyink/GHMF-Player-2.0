@@ -1,0 +1,1264 @@
+use egui::{Context, Ui, Color32, Stroke, RichText, TextureHandle, ColorImage};
+use egui_extras::{Size, StripBuilder, TableBuilder, Column};
+use egui_plot::{Plot, Line, PlotPoints, Legend};
+use crate::gui::theme;
+use crate::gui::playback_panel::{self, PlaybackPanelState};
+use crate::gui::procedures_panel::ProcedureEntry;
+use crate::audio::AudioPlayer;
+use std::time::Duration;
+use chrono::{Local, Timelike, NaiveTime, Datelike};
+use serde::{Deserialize, Serialize};
+use std::sync::mpsc::{channel, Sender, Receiver};
+use std::sync::{Arc, Mutex};
+use std::path::PathBuf;
+use std::fs;
+
+/// Represents a song in the playlist
+#[derive(Clone, Debug)]
+pub struct PlaylistSong {
+    pub title: String,
+    pub duration: Duration,
+    pub is_opening: bool,
+    pub is_ending: bool,
+}
+
+/// Weather information
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct WeatherInfo {
+    pub conditions: String,
+    pub temperature: i32,
+    pub wind_speed: i32,
+    pub hourly_forecast: Vec<HourlyForecast>,
+}
+
+/// Hourly forecast entry
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct HourlyForecast {
+    pub time: String,
+    pub temperature: i32,
+    pub short_forecast: String,
+    pub precipitation_chance: Option<u32>,
+}
+
+/// Schedule/Procedure information
+#[derive(Clone, Debug)]
+pub struct ProcedureInfo {
+    pub name: String,
+    pub time_until: Duration,
+}
+
+/// Announcement file info
+#[derive(Clone, Debug)]
+pub struct AnnouncementFile {
+    pub name: String,
+    pub path: String,
+}
+
+/// PLC output log entry
+#[derive(Clone, Debug)]
+pub struct PlcLogEntry {
+    pub timestamp: Duration,
+    pub ctl_codes: Vec<String>,
+}
+
+/// DMX fixture state
+#[derive(Clone, Debug)]
+pub struct DmxFixtureState {
+    pub fixture_number: u16,
+    pub red: u8,
+    pub green: u8,
+    pub blue: u8,
+}
+
+/// Playback state information
+#[derive(Clone, Debug)]
+pub struct PlaybackState {
+    pub current_song: Option<String>,
+    pub current_position: Duration,
+    pub total_duration: Duration,
+    pub is_playing: bool,
+    pub waveform_data: Vec<f32>, // Audio waveform amplitudes for visualization
+}
+
+/// Main operator panel state
+pub struct OperatorPanel {
+    // Playback state
+    pub playback: PlaybackState,
+    
+    // Volume controls
+    pub volume_left: f32,   // Controllable, starts at 35
+    pub volume_right: f32,  // Fixed at 45
+    
+    // Schedule information
+    pub show_start_time: String, // HH:MM PM format
+    pub next_procedure: Option<ProcedureInfo>,
+    
+    // Weather
+    pub weather: WeatherInfo,
+    pub last_weather_update: std::time::Instant,
+    pub weather_update_interval: std::time::Duration, // Update every minute
+    pub weather_rx: Receiver<WeatherInfo>,
+    pub weather_tx: Sender<WeatherInfo>,
+    pub weather_fetch_pending: bool,
+    
+    // Playlist
+    pub current_playlist: Vec<PlaylistSong>,
+    pub current_playlist_date: Option<String>,
+    pub current_playlist_theme: Option<String>,
+    pub current_song_index: usize,
+    pub total_runtime: Duration,
+    pub remaining_time: Duration,
+    
+    // Announcements
+    pub available_announcements: Vec<AnnouncementFile>,
+    pub show_announcement_popup: bool,
+    pub selected_announcement: Option<usize>,
+    
+    // PLC Output
+    pub plc_log: Vec<PlcLogEntry>,
+    pub max_plc_log_entries: usize,
+    
+    // DMX Output
+    pub dmx_fixtures: Vec<DmxFixtureState>,
+    
+    // Start Show With selector
+    pub available_playlists: Vec<String>,
+    pub selected_playlist_index: usize,
+    
+    // Weather icons
+    rain_icon: Option<Arc<TextureHandle>>,
+    right_arrow_icon: Option<Arc<TextureHandle>>,
+    down_arrow_icon: Option<Arc<TextureHandle>>,
+    temp_icon: Option<Arc<TextureHandle>>,
+    wind_icon: Option<Arc<TextureHandle>>,
+    list_icon: Option<Arc<TextureHandle>>,
+    theme_icon: Option<Arc<TextureHandle>>,
+    weather_clock_icon: Option<Arc<TextureHandle>>,
+    
+    // UI state
+    show_forecast: bool,
+}
+
+impl Default for OperatorPanel {
+    fn default() -> Self {
+        let (weather_tx, weather_rx) = channel();
+        
+        Self {
+            playback: PlaybackState {
+                current_song: None,
+                current_position: Duration::from_secs(0),
+                total_duration: Duration::from_secs(0),
+                is_playing: false,
+                waveform_data: Vec::new(),
+            },
+            volume_left: 35.0,
+            volume_right: 45.0,
+            show_start_time: "7:00 PM".to_string(),
+            next_procedure: None, // Will be updated from procedures panel
+            weather: WeatherInfo {
+                conditions: "Loading...".to_string(),
+                temperature: 0,
+                wind_speed: 0,
+                hourly_forecast: Vec::new(),
+            },
+            last_weather_update: std::time::Instant::now(),
+            weather_update_interval: std::time::Duration::from_secs(60), // Update every minute
+            weather_rx,
+            weather_tx,
+            weather_fetch_pending: false,
+            current_playlist: Vec::new(),
+            current_playlist_date: None,
+            current_playlist_theme: None,
+            current_song_index: 0,
+            total_runtime: Duration::from_secs(0),
+            remaining_time: Duration::from_secs(0),
+            available_announcements: Vec::new(),
+            show_announcement_popup: false,
+            selected_announcement: None,
+            plc_log: Vec::new(),
+            max_plc_log_entries: 50,
+            dmx_fixtures: Vec::new(),
+            available_playlists: vec![
+                "Pre-Show".to_string(),
+                "Playlist".to_string(),
+                "Testing".to_string(),
+            ],
+            selected_playlist_index: 0,
+            rain_icon: None,
+            right_arrow_icon: None,
+            down_arrow_icon: None,
+            temp_icon: None,
+            wind_icon: None,
+            list_icon: None,
+            theme_icon: None,
+            weather_clock_icon: None,
+            show_forecast: false,
+        }
+    }
+}
+
+impl OperatorPanel {
+    pub fn new() -> Self {
+        let mut panel = Self::default();
+        panel.load_todays_playlist();
+        panel
+    }
+    
+    /// Load today's playlist from the Music/Playlists folder
+    pub fn load_todays_playlist(&mut self) {
+        let today = Local::now().date_naive();
+        let playlist_folder = shellexpand::tilde("~/Desktop/GHMF Playback 2.0/Music/Playlists").to_string();
+        
+        // Try to find a playlist for today's date
+        if let Ok(entries) = fs::read_dir(&playlist_folder) {
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if path.extension().and_then(|s| s.to_str()) == Some("playlist") {
+                    // Read and parse the playlist file
+                    if let Ok(content) = fs::read_to_string(&path) {
+                        if let Ok(playlist) = serde_json::from_str::<crate::gui::playlist_panel::Playlist>(&content) {
+                            // Check if this playlist is for today
+                            if playlist.date == today {
+                                // Convert songs to PlaylistSong format
+                                self.current_playlist = playlist.songs.iter().map(|song| {
+                                    PlaylistSong {
+                                        title: song.title.clone(),
+                                        duration: Duration::from_secs(song.duration_secs as u64),
+                                        is_opening: song.title == "Opening",
+                                        is_ending: song.title == "Closing" || song.title == "Ending",
+                                    }
+                                }).collect();
+                                
+                                // Calculate total runtime
+                                self.total_runtime = Duration::from_secs(
+                                    playlist.songs.iter().map(|s| s.duration_secs as u64).sum()
+                                );
+                                self.remaining_time = self.total_runtime;
+                                
+                                // Store the date and theme
+                                self.current_playlist_date = Some(today.format("%m-%d-%Y").to_string());
+                                self.current_playlist_theme = Some(playlist.theme.clone());
+                                
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
+    /// Get the first song path from the selected playlist type
+    pub fn get_first_song_from_playlist(&self, playlist_type: &str) -> Option<PathBuf> {
+        use std::fs;
+        
+        let base_path = PathBuf::from("/Users/bradboyink/Desktop/GHMF Playback 2.0/Music");
+        
+        match playlist_type {
+            "Pre-Show" => {
+                // Load first song from Pre-Show folder
+                let pre_show_path = base_path.join("Pre-Show");
+                Self::get_first_audio_file_from_folder(&pre_show_path)
+            }
+            "Playlist" => {
+                // Load first song from today's playlist in Playlists folder
+                let playlist_folder = base_path.join("Playlists");
+                let today = Local::now().date_naive();
+                
+                // Find today's playlist
+                if let Ok(entries) = fs::read_dir(&playlist_folder) {
+                    for entry in entries.flatten() {
+                        let path = entry.path();
+                        if path.extension().and_then(|s| s.to_str()) == Some("playlist") {
+                            if let Ok(content) = fs::read_to_string(&path) {
+                                if let Ok(playlist) = serde_json::from_str::<crate::gui::playlist_panel::Playlist>(&content) {
+                                    if playlist.date == today && !playlist.songs.is_empty() {
+                                        return Some(playlist.songs[0].path.clone());
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                None
+            }
+            "Testing" => {
+                // Load first song from Testing folder
+                let testing_path = base_path.join("Testing");
+                Self::get_first_audio_file_from_folder(&testing_path)
+            }
+            _ => None
+        }
+    }
+    
+    /// Helper to get first audio file from a folder
+    fn get_first_audio_file_from_folder(folder: &PathBuf) -> Option<PathBuf> {
+        use std::fs;
+        
+        if let Ok(entries) = fs::read_dir(folder) {
+            let mut audio_files: Vec<PathBuf> = entries
+                .flatten()
+                .map(|e| e.path())
+                .filter(|p| {
+                    p.extension()
+                        .and_then(|s| s.to_str())
+                        .map(|ext| matches!(ext, "wav" | "mp3" | "flac"))
+                        .unwrap_or(false)
+                })
+                .collect();
+            
+            // Sort alphabetically
+            audio_files.sort();
+            
+            // Return first file
+            audio_files.into_iter().next()
+        } else {
+            None
+        }
+    }
+    
+    /// Update procedures based on show start time
+    pub fn update_procedures(&mut self, procedures: &[ProcedureEntry], show_start_time: &str) {
+        // Parse show start time (format: "7:00 PM")
+        let show_time = Self::parse_show_time(show_start_time);
+        let now = Local::now().time();
+        
+        // Calculate minutes until show starts
+        let minutes_until_show = Self::minutes_between(now, show_time);
+        
+        // Determine which mode we're in based on time of day
+        let current_hour = now.hour();
+        let current_minute = now.minute();
+        
+        let mut next_proc = None;
+        
+        // From 12:00 AM until 8:00 PM show Idle Mode
+        if current_hour < 20 {
+            next_proc = Some(ProcedureInfo {
+                name: "Idle Mode".to_string(),
+                time_until: Duration::from_secs(0),
+            });
+        }
+        // From 11:00 PM until 12:00 AM show Idle Mode
+        else if current_hour >= 23 {
+            next_proc = Some(ProcedureInfo {
+                name: "Idle Mode".to_string(),
+                time_until: Duration::from_secs(0),
+            });
+        }
+        // From 8:00 PM until 20 minutes before show time: Perform Fountain Test
+        else if minutes_until_show > 20 {
+            next_proc = Some(ProcedureInfo {
+                name: "Perform Fountain Test".to_string(),
+                time_until: Duration::from_secs(0),
+            });
+        }
+        // From 20 minutes before show time: follow procedures schedule
+        else {
+            // Find the next procedure based on minutes until show
+            for proc in procedures {
+                if minutes_until_show >= proc.minutes_before as i64 {
+                    // This procedure should trigger
+                    let minutes_diff = (minutes_until_show - proc.minutes_before as i64).abs();
+                    next_proc = Some(ProcedureInfo {
+                        name: proc.name.clone(),
+                        time_until: Duration::from_secs(minutes_diff as u64 * 60),
+                    });
+                    break;
+                }
+            }
+            
+            // If no procedure found, default to Perform Fountain Test
+            if next_proc.is_none() {
+                next_proc = Some(ProcedureInfo {
+                    name: "Perform Fountain Test".to_string(),
+                    time_until: Duration::from_secs(0),
+                });
+            }
+        }
+        
+        self.next_procedure = next_proc;
+        self.show_start_time = show_start_time.to_string();
+    }
+    
+    /// Fetch weather data from weather.gov API
+    pub fn fetch_weather(&self) {
+        let tx = self.weather_tx.clone();
+        
+        tokio::spawn(async move {
+            match fetch_weather_data().await {
+                Ok(new_weather) => {
+                    let _ = tx.send(new_weather);
+                }
+                Err(e) => {
+                    eprintln!("Failed to fetch weather: {}", e);
+                }
+            }
+        });
+    }
+    
+    /// Parse show start time string like "7:00 PM" into NaiveTime
+    fn parse_show_time(time_str: &str) -> NaiveTime {
+        // Try to parse various formats
+        if let Ok(time) = NaiveTime::parse_from_str(time_str, "%I:%M %p") {
+            return time;
+        }
+        if let Ok(time) = NaiveTime::parse_from_str(time_str, "%H:%M") {
+            return time;
+        }
+        // Default to 7:00 PM if parsing fails
+        NaiveTime::from_hms_opt(19, 0, 0).unwrap()
+    }
+    
+    /// Calculate minutes between two times
+    fn minutes_between(from: NaiveTime, to: NaiveTime) -> i64 {
+        let from_secs = from.num_seconds_from_midnight() as i64;
+        let to_secs = to.num_seconds_from_midnight() as i64;
+        
+        let mut diff = to_secs - from_secs;
+        
+        // Handle crossing midnight
+        if diff < 0 {
+            diff += 24 * 60 * 60;
+        }
+        
+        diff / 60
+    }
+    
+    /// Load rain icon texture
+    fn load_rain_icon(&mut self, ctx: &Context) {
+        if self.rain_icon.is_some() {
+            return;
+        }
+        
+        let icon_bytes = include_bytes!("../../assets/rain.png");
+        if let Ok(image) = image::load_from_memory(icon_bytes) {
+            let size = [image.width() as _, image.height() as _];
+            let image_buffer = image.to_rgba8();
+            let pixels = image_buffer.as_flat_samples();
+            let color_image = ColorImage::from_rgba_unmultiplied(size, pixels.as_slice());
+            
+            let texture = ctx.load_texture(
+                "rain_icon",
+                color_image,
+                Default::default()
+            );
+            
+            self.rain_icon = Some(Arc::new(texture));
+        }
+    }
+    
+    /// Load temp icon texture
+    fn load_temp_icon(&mut self, ctx: &Context) {
+        if self.temp_icon.is_some() {
+            return;
+        }
+        
+        let icon_bytes = include_bytes!("../../assets/temp.png");
+        if let Ok(image) = image::load_from_memory(icon_bytes) {
+            let size = [image.width() as _, image.height() as _];
+            let image_buffer = image.to_rgba8();
+            let pixels = image_buffer.as_flat_samples();
+            let color_image = ColorImage::from_rgba_unmultiplied(size, pixels.as_slice());
+            
+            let texture = ctx.load_texture(
+                "temp_icon",
+                color_image,
+                Default::default()
+            );
+            
+            self.temp_icon = Some(Arc::new(texture));
+        }
+    }
+    
+    /// Load wind icon texture
+    fn load_wind_icon(&mut self, ctx: &Context) {
+        if self.wind_icon.is_some() {
+            return;
+        }
+        
+        let icon_bytes = include_bytes!("../../assets/wind.png");
+        if let Ok(image) = image::load_from_memory(icon_bytes) {
+            let size = [image.width() as _, image.height() as _];
+            let image_buffer = image.to_rgba8();
+            let pixels = image_buffer.as_flat_samples();
+            let color_image = ColorImage::from_rgba_unmultiplied(size, pixels.as_slice());
+            
+            let texture = ctx.load_texture(
+                "wind_icon",
+                color_image,
+                Default::default()
+            );
+            
+            self.wind_icon = Some(Arc::new(texture));
+        }
+    }
+    
+    /// Load arrow icon textures
+    fn load_arrow_icons(&mut self, ctx: &Context) {
+        if self.right_arrow_icon.is_none() {
+            let icon_bytes = include_bytes!("../../assets/right.png");
+            if let Ok(image) = image::load_from_memory(icon_bytes) {
+                let size = [image.width() as _, image.height() as _];
+                let image_buffer = image.to_rgba8();
+                let pixels = image_buffer.as_flat_samples();
+                let color_image = ColorImage::from_rgba_unmultiplied(size, pixels.as_slice());
+                
+                let texture = ctx.load_texture(
+                    "right_arrow_icon",
+                    color_image,
+                    Default::default()
+                );
+                
+                self.right_arrow_icon = Some(Arc::new(texture));
+            }
+        }
+        
+        if self.down_arrow_icon.is_none() {
+            let icon_bytes = include_bytes!("../../assets/down.png");
+            if let Ok(image) = image::load_from_memory(icon_bytes) {
+                let size = [image.width() as _, image.height() as _];
+                let image_buffer = image.to_rgba8();
+                let pixels = image_buffer.as_flat_samples();
+                let color_image = ColorImage::from_rgba_unmultiplied(size, pixels.as_slice());
+                
+                let texture = ctx.load_texture(
+                    "down_arrow_icon",
+                    color_image,
+                    Default::default()
+                );
+                
+                self.down_arrow_icon = Some(Arc::new(texture));
+            }
+        }
+    }
+    
+    /// Load list icon texture
+    fn load_list_icon(&mut self, ctx: &Context) {
+        if self.list_icon.is_some() {
+            return;
+        }
+        
+        let icon_bytes = include_bytes!("../../assets/list.png");
+        if let Ok(image) = image::load_from_memory(icon_bytes) {
+            let size = [image.width() as _, image.height() as _];
+            let image_buffer = image.to_rgba8();
+            let pixels = image_buffer.as_flat_samples();
+            let color_image = ColorImage::from_rgba_unmultiplied(size, pixels.as_slice());
+            
+            let texture = ctx.load_texture(
+                "list_icon",
+                color_image,
+                Default::default()
+            );
+            
+            self.list_icon = Some(Arc::new(texture));
+        }
+    }
+    
+    /// Load theme icon texture
+    fn load_theme_icon(&mut self, ctx: &Context) {
+        if self.theme_icon.is_some() {
+            return;
+        }
+        
+        let icon_bytes = include_bytes!("../../assets/theme.png");
+        if let Ok(image) = image::load_from_memory(icon_bytes) {
+            let size = [image.width() as _, image.height() as _];
+            let image_buffer = image.to_rgba8();
+            let pixels = image_buffer.as_flat_samples();
+            let color_image = ColorImage::from_rgba_unmultiplied(size, pixels.as_slice());
+            
+            let texture = ctx.load_texture(
+                "theme_icon",
+                color_image,
+                Default::default()
+            );
+            
+            self.theme_icon = Some(Arc::new(texture));
+        }
+    }
+    
+    /// Load weather clock icon texture
+    fn load_weather_clock_icon(&mut self, ctx: &Context) {
+        if self.weather_clock_icon.is_some() {
+            return;
+        }
+        
+        let icon_bytes = include_bytes!("../../assets/clock.png");
+        if let Ok(image) = image::load_from_memory(icon_bytes) {
+            let size = [image.width() as _, image.height() as _];
+            let image_buffer = image.to_rgba8();
+            let pixels = image_buffer.as_flat_samples();
+            let color_image = ColorImage::from_rgba_unmultiplied(size, pixels.as_slice());
+            
+            let texture = ctx.load_texture(
+                "weather_clock_icon",
+                color_image,
+                Default::default()
+            );
+            
+            self.weather_clock_icon = Some(Arc::new(texture));
+        }
+    }
+    
+    /// Main UI render function
+    /// Returns Some(playlist_type) if user selected a new playlist type to load
+    pub fn show(&mut self, 
+        ctx: &Context, 
+        ui: &mut Ui,
+        is_playing: &mut bool,
+        is_paused: &mut bool,
+        playback_position: Duration,
+        playback_duration: Duration,
+        current_song: &str,
+        current_playlist: &str,
+        audio_player: &Option<Arc<Mutex<AudioPlayer>>>,
+        playback_panel_state: &mut PlaybackPanelState,
+        current_song_path: &Option<PathBuf>,
+    ) -> Option<String> {
+        // Load icons if not already loaded
+        self.load_rain_icon(ctx);
+        self.load_arrow_icons(ctx);
+        self.load_temp_icon(ctx);
+        self.load_wind_icon(ctx);
+        self.load_list_icon(ctx);
+        self.load_theme_icon(ctx);
+        self.load_weather_clock_icon(ctx);
+        
+        // Check for weather updates from async task
+        if let Ok(new_weather) = self.weather_rx.try_recv() {
+            self.weather = new_weather;
+            self.weather_fetch_pending = false;
+        }
+        
+        // Update weather if needed (every minute) and not already pending
+        if !self.weather_fetch_pending && self.last_weather_update.elapsed() >= self.weather_update_interval {
+            self.fetch_weather();
+            self.weather_fetch_pending = true;
+            self.last_weather_update = std::time::Instant::now();
+        }
+        
+        // Request repaint to keep time updated
+        ctx.request_repaint();
+        
+        let mut selected_playlist_type = None;
+        
+        // Main layout: horizontal split with sidebar on left, main content on right
+        egui::SidePanel::left("operator_left_panel")
+            .resizable(false)
+            .exact_width(280.0)
+            .show_inside(ui, |ui| {
+                selected_playlist_type = self.show_left_sidebar(ui);
+            });
+        
+        egui::CentralPanel::default().show_inside(ui, |ui| {
+            self.show_main_content(ui, is_playing, is_paused, playback_position, playback_duration, 
+                current_song, current_playlist, audio_player, playback_panel_state, current_song_path);
+        });
+        
+        // Announcement popup modal
+        if self.show_announcement_popup {
+            self.show_announcement_popup_window(ctx);
+        }
+        
+        selected_playlist_type
+    }
+    
+    /// Fetch weather data from weather.gov API for Grand Haven, MI 49417
+    fn fetch_weather_async(&mut self) {
+        // TODO: Implement async weather API call to weather.gov
+        // For now, update with placeholder data
+        // This will be implemented with tokio spawn and reqwest in the integration phase
+    }
+    
+    /// Save weather log at show start time
+    fn save_weather_log(&self) {
+        // TODO: Write weather JSON file with date, time, weather info, playlist name, theme
+    }
+    
+    /// Left sidebar with information cards
+    /// Returns Some(playlist_type) if user selected a new playlist type to load
+    fn show_left_sidebar(&mut self, ui: &mut Ui) -> Option<String> {
+        let mut selected_playlist_type = None;
+        
+        egui::ScrollArea::vertical()
+            .auto_shrink([false, false])
+            .show(ui, |ui| {
+            ui.add_space(10.0);
+            
+            // Add right padding to prevent scrollbar overlap
+            let margin = egui::Margin {
+                left: 0.0,
+                right: 10.0,
+                top: 0.0,
+                bottom: 0.0,
+            };
+            egui::Frame::none()
+                .inner_margin(margin)
+                .show(ui, |ui| {
+                    // 1. Current Time / Next Procedure Card
+                    self.show_time_procedure_card(ui);
+                    ui.add_space(15.0);
+                    
+                    // 2. Weather Card
+                    self.show_weather_card(ui);
+                    ui.add_space(15.0);
+                    
+                    // 3. Tonight's Show Starts At Card
+                    self.show_show_start_card(ui);
+                    ui.add_space(15.0);
+                    
+                    // 4. Playlist Display
+                    self.show_playlist_display(ui);
+                    ui.add_space(15.0);
+                    
+                    // 5. Start Show With Selector
+                    if let Some(playlist_type) = self.show_start_show_selector(ui) {
+                        // Return the playlist type to be handled in app.rs
+                        selected_playlist_type = Some(playlist_type);
+                    }
+                    ui.add_space(10.0);
+                });
+        });
+        
+        selected_playlist_type
+    }
+    
+    /// Main content area with playback controls and outputs
+    fn show_main_content(&mut self, 
+        ui: &mut Ui,
+        is_playing: &mut bool,
+        is_paused: &mut bool,
+        playback_position: Duration,
+        playback_duration: Duration,
+        current_song: &str,
+        current_playlist: &str,
+        audio_player: &Option<Arc<Mutex<AudioPlayer>>>,
+        playback_panel_state: &mut PlaybackPanelState,
+        current_song_path: &Option<PathBuf>,
+    ) {
+        egui::ScrollArea::vertical().show(ui, |ui| {
+            // Use the Phase 3 playback panel for the main content
+            playback_panel::show(
+                ui,
+                is_playing,
+                is_paused,
+                playback_position,
+                playback_duration,
+                current_song,
+                current_playlist,
+                audio_player,
+                playback_panel_state,
+                current_song_path,
+            );
+            
+            ui.add_space(30.0);
+            
+            // 4. PLC Output Section
+            self.show_plc_output(ui);
+            ui.add_space(20.0);
+            
+            // 5. DMX Output Section
+            self.show_dmx_output(ui);
+            ui.add_space(20.0);
+        });
+    }
+    
+    // Placeholder methods for each section - will implement in subsequent phases
+    
+    fn show_time_procedure_card(&mut self, ui: &mut Ui) {
+        egui::Frame::none()
+            .fill(theme::AppColors::SURFACE)
+            .stroke(Stroke::new(1.0, theme::AppColors::SURFACE_LIGHT))
+            .rounding(8.0)
+            .inner_margin(16.0)
+            .show(ui, |ui| {
+                ui.vertical_centered(|ui| {
+                    // Current Time
+                    let now = Local::now();
+                    let time_str = now.format("%I:%M:%S %p").to_string();
+                    ui.label(RichText::new(time_str)
+                        .size(24.0)
+                        .strong()
+                        .color(theme::AppColors::CYAN));
+                    
+                    ui.add_space(8.0);
+                    
+                    // Next Procedure
+                    if let Some(ref procedure) = self.next_procedure {
+                        // Show minutes countdown only if not in Idle Mode or Fountain Test
+                        if procedure.name != "Perform Fountain Test" 
+                            && procedure.name != "Idle Mode" 
+                            && procedure.time_until.as_secs() > 0 {
+                            let minutes_until = procedure.time_until.as_secs() / 60;
+                            ui.label(RichText::new(format!("Next Procedure in {} Minutes", minutes_until))
+                                .size(14.0)
+                                .color(Color32::WHITE));
+                            ui.add_space(4.0);
+                        }
+                        
+                        ui.label(RichText::new(&procedure.name)
+                            .size(15.0)
+                            .strong()
+                            .color(if procedure.name == "Perform Fountain Test" || procedure.name == "Idle Mode" {
+                                theme::AppColors::CYAN
+                            } else {
+                                Color32::WHITE
+                            }));
+                    } else {
+                        ui.label(RichText::new("No Procedure Scheduled")
+                            .size(14.0)
+                            .color(theme::AppColors::TEXT_SECONDARY));
+                    }
+                });
+            });
+    }
+    
+    fn show_weather_card(&mut self, ui: &mut Ui) {
+        egui::Frame::none()
+            .fill(theme::AppColors::SURFACE)
+            .stroke(Stroke::new(1.0, theme::AppColors::SURFACE_LIGHT))
+            .rounding(8.0)
+            .inner_margin(16.0)
+            .show(ui, |ui| {
+                ui.vertical(|ui| {
+                    // Header with Weather text and clock icon on the right
+                    ui.horizontal(|ui| {
+                        ui.label(RichText::new("Weather")
+                            .size(16.0)
+                            .strong()
+                            .color(theme::AppColors::CYAN));
+                        
+                        // Spacer to push icon to the right
+                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                            if let Some(ref clock_icon) = self.weather_clock_icon {
+                                let image = egui::Image::new(clock_icon.as_ref())
+                                    .fit_to_exact_size(egui::Vec2::new(14.0, 14.0))
+                                    .tint(if self.show_forecast { 
+                                        theme::AppColors::CYAN 
+                                    } else { 
+                                        Color32::WHITE 
+                                    });
+                                let image_response = ui.add(image);
+                                if image_response.interact(egui::Sense::click()).clicked() {
+                                    self.show_forecast = !self.show_forecast;
+                                }
+                                if image_response.hovered() {
+                                    ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
+                                }
+                            }
+                        });
+                    });
+                    ui.add_space(8.0);
+                    
+                    // Toggle between current conditions and forecast
+                    if !self.show_forecast {
+                        // Current Conditions
+                        ui.label(RichText::new(&self.weather.conditions)
+                            .size(14.0)
+                            .color(Color32::WHITE));
+                        
+                        ui.add_space(4.0);
+                        
+                        // Temperature and Wind
+                        ui.horizontal(|ui| {
+                            // Temperature with icon
+                            if let Some(ref temp_icon) = self.temp_icon {
+                                let icon_size = egui::Vec2::new(16.0, 16.0);
+                                ui.add(egui::Image::new(temp_icon.as_ref()).fit_to_exact_size(icon_size).tint(Color32::WHITE));
+                            }
+                            ui.label(RichText::new(format!("Temp: {}°F", self.weather.temperature))
+                                .size(13.0)
+                                .color(Color32::WHITE));
+                            ui.add_space(8.0);
+                            
+                            // Wind with icon
+                            if let Some(ref wind_icon) = self.wind_icon {
+                                let icon_size = egui::Vec2::new(16.0, 16.0);
+                                ui.add(egui::Image::new(wind_icon.as_ref()).fit_to_exact_size(icon_size).tint(Color32::WHITE));
+                            }
+                            ui.label(RichText::new(format!("Wind: {} mph", self.weather.wind_speed))
+                                .size(13.0)
+                                .color(Color32::WHITE));
+                        });
+                    } else {
+                        // Two Hour Forecast
+                        if !self.weather.hourly_forecast.is_empty() {
+                            for forecast in &self.weather.hourly_forecast {
+                                ui.horizontal(|ui| {
+                                    ui.label(RichText::new(&forecast.time)
+                                        .size(12.0)
+                                        .color(theme::AppColors::TEXT_SECONDARY));
+                                    ui.label(RichText::new(format!("{}°F", forecast.temperature))
+                                        .size(12.0)
+                                        .color(Color32::WHITE));
+                                    ui.label(RichText::new(&forecast.short_forecast)
+                                        .size(12.0)
+                                        .color(theme::AppColors::TEXT_SECONDARY));
+                                    if let Some(precip) = forecast.precipitation_chance {
+                                        if precip > 0 {
+                                            ui.horizontal(|ui| {
+                                                ui.label(RichText::new(format!("{}%", precip))
+                                                    .size(12.0)
+                                                    .color(theme::AppColors::CYAN));
+                                                
+                                                // Show rain icon if loaded
+                                                if let Some(ref rain_icon) = self.rain_icon {
+                                                    let icon_size = egui::Vec2::new(16.0, 16.0);
+                                                    ui.add(egui::Image::new(rain_icon.as_ref()).fit_to_exact_size(icon_size));
+                                                }
+                                            });
+                                        }
+                                    }
+                                });
+                                ui.add_space(2.0);
+                            }
+                        } else {
+                            ui.label(RichText::new("No forecast data available")
+                                .size(12.0)
+                                .color(theme::AppColors::TEXT_SECONDARY));
+                        }
+                    }
+                });
+            });
+    }
+    
+    fn show_show_start_card(&mut self, ui: &mut Ui) {
+        egui::Frame::none()
+            .fill(theme::AppColors::SURFACE)
+            .stroke(Stroke::new(1.0, theme::AppColors::SURFACE_LIGHT))
+            .rounding(8.0)
+            .inner_margin(16.0)
+            .show(ui, |ui| {
+                ui.vertical_centered(|ui| {
+                    ui.label(RichText::new("Tonight's Show Starts At")
+                        .size(14.0)
+                        .color(theme::AppColors::TEXT_SECONDARY));
+                    ui.add_space(6.0);
+                    ui.label(RichText::new(&self.show_start_time)
+                        .size(28.0)
+                        .strong()
+                        .color(Color32::WHITE));
+                });
+            });
+    }
+    
+    fn show_playlist_display(&mut self, ui: &mut Ui) {
+        egui::Frame::none()
+            .fill(theme::AppColors::SURFACE)
+            .stroke(Stroke::new(1.0, theme::AppColors::SURFACE_LIGHT))
+            .rounding(8.0)
+            .inner_margin(12.0)
+            .show(ui, |ui| {
+                ui.vertical(|ui| {
+                    // Playlist header with date and theme
+                    ui.horizontal(|ui| {
+                        // List icon
+                        if let Some(ref list_icon) = self.list_icon {
+                            let icon_size = egui::Vec2::new(16.0, 16.0);
+                            ui.add(egui::Image::new(list_icon.as_ref()).fit_to_exact_size(icon_size).tint(Color32::WHITE));
+                        }
+                        
+                        // Date
+                        if let Some(ref date) = self.current_playlist_date {
+                            ui.label(RichText::new(date)
+                                .size(14.0)
+                                .strong()
+                                .color(Color32::WHITE));
+                        } else {
+                            let now = Local::now();
+                            ui.label(RichText::new(now.format("%m-%d-%Y").to_string())
+                                .size(14.0)
+                                .strong()
+                                .color(Color32::WHITE));
+                        }
+                        
+                        // 2 spaces
+                        ui.label(RichText::new("  ")
+                            .size(14.0));
+                        
+                        // Theme icon
+                        if let Some(ref theme_icon) = self.theme_icon {
+                            let icon_size = egui::Vec2::new(16.0, 16.0);
+                            ui.add(egui::Image::new(theme_icon.as_ref()).fit_to_exact_size(icon_size).tint(Color32::WHITE));
+                        }
+                        
+                        // Theme
+                        if let Some(ref theme) = self.current_playlist_theme {
+                            ui.label(RichText::new(theme)
+                                .size(14.0)
+                                .strong()
+                                .color(Color32::WHITE));
+                        }
+                    });
+                    
+                    ui.add_space(8.0);
+                    
+                    // Scrollable song list
+                    egui::ScrollArea::vertical()
+                        .max_height(300.0)
+                        .show(ui, |ui| {
+                            if self.current_playlist.is_empty() {
+                                ui.label(RichText::new("No playlist loaded")
+                                    .size(13.0)
+                                    .color(theme::AppColors::TEXT_SECONDARY));
+                            } else {
+                                for (index, song) in self.current_playlist.iter().enumerate() {
+                                    ui.horizontal(|ui| {
+                                        // Play indicator for current song
+                                        if index == self.current_song_index && self.playback.is_playing {
+                                            ui.label(RichText::new("▶")
+                                                .size(12.0)
+                                                .color(Color32::from_rgb(0, 255, 0)));
+                                        } else {
+                                            ui.add_space(15.0);
+                                        }
+                                        
+                                        // Song title with special markers
+                                        let title = if song.is_opening {
+                                            "Opening"
+                                        } else if song.is_ending {
+                                            "Ending"
+                                        } else {
+                                            &song.title
+                                        };
+                                        
+                                        ui.label(RichText::new(title)
+                                            .size(13.0)
+                                            .color(if index == self.current_song_index && self.playback.is_playing {
+                                                Color32::from_rgb(0, 255, 0)
+                                            } else {
+                                                theme::AppColors::TEXT_SECONDARY
+                                            }));
+                                        
+                                        // Duration
+                                        let duration_str = format!("{}:{:02}",
+                                            song.duration.as_secs() / 60,
+                                            song.duration.as_secs() % 60);
+                                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                                            ui.label(RichText::new(duration_str)
+                                                .size(13.0)
+                                                .color(if index == self.current_song_index && self.playback.is_playing {
+                                                    Color32::from_rgb(0, 255, 0)
+                                                } else {
+                                                    theme::AppColors::TEXT_SECONDARY
+                                                }));
+                                        });
+                                    });
+                                    ui.add_space(4.0);
+                                }
+                            }
+                        });
+                    
+                    ui.add_space(8.0);
+                    ui.separator();
+                    ui.add_space(4.0);
+                    
+                    // Total and Remaining time
+                    ui.horizontal(|ui| {
+                        let total_str = format!("Total: {}:{:02}",
+                            self.total_runtime.as_secs() / 60,
+                            self.total_runtime.as_secs() % 60);
+                        ui.label(RichText::new(total_str)
+                            .size(14.0)
+                            .color(theme::AppColors::TEXT_SECONDARY));
+                        
+                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                            let remaining_str = format!("Remaining: {}:{:02}",
+                                self.remaining_time.as_secs() / 60,
+                                self.remaining_time.as_secs() % 60);
+                            ui.label(RichText::new(remaining_str)
+                                .size(14.0)
+                                .color(theme::AppColors::TEXT_SECONDARY));
+                        });
+                    });
+                });
+            });
+    }
+    
+    fn show_start_show_selector(&mut self, ui: &mut Ui) -> Option<String> {
+        let mut playlist_to_load = None;
+        
+        egui::Frame::none()
+            .fill(theme::AppColors::SURFACE)
+            .stroke(Stroke::new(1.0, theme::AppColors::SURFACE_LIGHT))
+            .rounding(8.0)
+            .inner_margin(12.0)
+            .show(ui, |ui| {
+                ui.vertical(|ui| {
+                    ui.label(RichText::new("Start Show With")
+                        .size(13.0)
+                        .color(theme::AppColors::TEXT_SECONDARY));
+                    ui.add_space(6.0);
+                    
+                    // ComboBox for playlist selection
+                    let available_width = ui.available_width();
+                    let previous_selection = self.selected_playlist_index;
+                    egui::ComboBox::from_id_source("start_show_playlist")
+                        .selected_text(&self.available_playlists[self.selected_playlist_index])
+                        .width(available_width)
+                        .show_ui(ui, |ui| {
+                            for (i, playlist_name) in self.available_playlists.iter().enumerate() {
+                                ui.selectable_value(&mut self.selected_playlist_index, i, playlist_name);
+                            }
+                        });
+                    
+                    // If selection changed, trigger loading
+                    if previous_selection != self.selected_playlist_index {
+                        playlist_to_load = Some(self.available_playlists[self.selected_playlist_index].clone());
+                    }
+                });
+            });
+        
+        playlist_to_load
+    }
+    
+    
+    fn show_plc_output(&mut self, ui: &mut Ui) {
+        egui::Frame::none()
+            .fill(theme::AppColors::SURFACE)
+            .stroke(Stroke::new(1.0, theme::AppColors::SURFACE_LIGHT))
+            .rounding(8.0)
+            .inner_margin(16.0)
+            .show(ui, |ui| {
+                ui.label("PLC Output - TBD");
+            });
+    }
+    
+    fn show_dmx_output(&mut self, ui: &mut Ui) {
+        egui::Frame::none()
+            .fill(theme::AppColors::SURFACE)
+            .stroke(Stroke::new(1.0, theme::AppColors::SURFACE_LIGHT))
+            .rounding(8.0)
+            .inner_margin(16.0)
+            .show(ui, |ui| {
+                ui.label("DMX Output - TBD");
+            });
+    }
+    
+    fn show_announcement_popup_window(&mut self, ctx: &Context) {
+        egui::Window::new("Select Announcement")
+            .collapsible(false)
+            .resizable(false)
+            .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
+            .show(ctx, |ui| {
+                ui.label("Announcement Popup - TBD");
+                
+                if ui.button("Close").clicked() {
+                    self.show_announcement_popup = false;
+                }
+            });
+    }
+}
+// Weather.gov API structures
+#[derive(Deserialize, Debug)]
+struct PointsResponse {
+    properties: PointsProperties,
+}
+
+#[derive(Deserialize, Debug)]
+struct PointsProperties {
+    #[serde(rename = "forecastHourly")]
+    forecast_hourly: String,
+}
+
+#[derive(Deserialize, Debug)]
+struct ForecastResponse {
+    properties: ForecastProperties,
+}
+
+#[derive(Deserialize, Debug)]
+struct ForecastProperties {
+    periods: Vec<ForecastPeriod>,
+}
+
+#[derive(Deserialize, Debug)]
+struct ForecastPeriod {
+    temperature: i32,
+    #[serde(rename = "shortForecast")]
+    short_forecast: String,
+    #[serde(rename = "startTime")]
+    start_time: String,
+    #[serde(rename = "probabilityOfPrecipitation")]
+    probability_of_precipitation: Option<ProbabilityValue>,
+    #[serde(rename = "windSpeed")]
+    wind_speed: String,
+}
+
+#[derive(Deserialize, Debug)]
+struct ProbabilityValue {
+    value: Option<u32>,
+}
+
+/// Fetch weather data from weather.gov API for Grand Haven, MI
+async fn fetch_weather_data() -> Result<WeatherInfo, Box<dyn std::error::Error>> {
+    let client = reqwest::Client::builder()
+        .user_agent("GHMF-Playback/2.0 (contact@example.com)")
+        .build()?;
+    
+    // Grand Haven, MI coordinates
+    let lat = 43.0631;
+    let lon = -86.2284;
+    
+    // Step 1: Get the forecast URL for this location
+    let points_url = format!("https://api.weather.gov/points/{},{}", lat, lon);
+    let points_response: PointsResponse = client.get(&points_url)
+        .send()
+        .await?
+        .json()
+        .await?;
+    
+    // Step 2: Get hourly forecast
+    let forecast_url = &points_response.properties.forecast_hourly;
+    let forecast_response: ForecastResponse = client.get(forecast_url)
+        .send()
+        .await?
+        .json()
+        .await?;
+    
+    let periods = forecast_response.properties.periods;
+    
+    if periods.is_empty() {
+        return Err("No forecast data available".into());
+    }
+    
+    // Current conditions (first period)
+    let current = &periods[0];
+    
+    // Extract wind speed number (e.g., "5 mph" -> 5)
+    let wind_speed = current.wind_speed
+        .split_whitespace()
+        .next()
+        .and_then(|s| s.parse::<i32>().ok())
+        .unwrap_or(0);
+    
+    // Get next hour forecast (take first 2 periods for next hour)
+    let hourly_forecast: Vec<HourlyForecast> = periods.iter()
+        .skip(1) // Skip current
+        .take(2) // Next 2 hours
+        .map(|period| {
+            // Parse time from ISO 8601 format to just hour
+            let time = chrono::DateTime::parse_from_rfc3339(&period.start_time)
+                .ok()
+                .map(|dt| dt.format("%I:%M %p").to_string())
+                .unwrap_or_else(|| "Unknown".to_string());
+            
+            HourlyForecast {
+                time,
+                temperature: period.temperature,
+                short_forecast: period.short_forecast.clone(),
+                precipitation_chance: period.probability_of_precipitation
+                    .as_ref()
+                    .and_then(|p| p.value),
+            }
+        })
+        .collect();
+    
+    Ok(WeatherInfo {
+        conditions: current.short_forecast.clone(),
+        temperature: current.temperature,
+        wind_speed,
+        hourly_forecast,
+    })
+}

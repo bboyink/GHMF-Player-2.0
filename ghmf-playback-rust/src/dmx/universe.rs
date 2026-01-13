@@ -53,6 +53,16 @@ impl DmxUniverse {
     pub fn clear(&mut self) {
         self.channels.fill(0);
     }
+    
+    /// Clear all channels to 0 except those in the ignore list (1-indexed)
+    pub fn clear_except(&mut self, ignore_channels: &[u16]) {
+        for (idx, channel) in self.channels.iter_mut().enumerate() {
+            let channel_num = (idx + 1) as u16;
+            if !ignore_channels.contains(&channel_num) {
+                *channel = 0;
+            }
+        }
+    }
 
     /// Get the raw channel array
     pub fn as_slice(&self) -> &[u8] {

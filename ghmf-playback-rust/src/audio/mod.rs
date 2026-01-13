@@ -1,8 +1,10 @@
 mod player;
 mod decoder;
+mod waveform;
 
 pub use player::AudioPlayer;
 pub use decoder::AudioDecoder;
+pub use waveform::{WaveformData};
 
 use thiserror::Error;
 

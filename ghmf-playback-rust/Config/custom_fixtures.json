@@ -5,7 +5,8 @@
       "name": "Fireworks",
       "fixture_type": "Other",
       "light_type": null,
-      "channel_count": 4
+      "channel_count": 4,
+      "ignore_reset": true
     }
   ]
 }

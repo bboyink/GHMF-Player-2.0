@@ -83,6 +83,22 @@ impl StartTimePanel {
         }
     }
     
+    /// Get show start time for today's date, or default to "7:00 PM"
+    pub fn get_today_start_time(&self) -> String {
+        let today = Local::now().naive_local().date();
+        let today_str = today.format("%m-%d-%Y").to_string();
+        
+        // Look for today's entry in config
+        for entry in &self.config.entries {
+            if entry.date == today_str {
+                return entry.time.clone();
+            }
+        }
+        
+        // Default to 7:00 PM if not found
+        "7:00 PM".to_string()
+    }
+    
     pub fn show(&mut self, _ctx: &Context, ui: &mut Ui) {
         // Header
         ui.label(
@@ -181,7 +197,7 @@ impl StartTimePanel {
                             );
                         } else {
                             egui::ScrollArea::vertical()
-                                .id_salt("start_times_scroll")
+                                .id_source("start_times_scroll")
                                 .max_height(500.0)
                                 .show(ui, |ui| {
                                     let mut to_remove: Option<usize> = None;
@@ -347,7 +363,7 @@ impl StartTimePanel {
     
     fn show_time_selector(&mut self, ui: &mut Ui) {
         egui::ScrollArea::vertical()
-            .id_salt("time_selector_scroll")
+            .id_source("time_selector_scroll")
             .max_height(400.0)
             .show(ui, |ui| {
                 let has_date = self.selected_date.is_some();

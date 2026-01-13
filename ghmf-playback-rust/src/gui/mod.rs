@@ -11,9 +11,12 @@ mod light_group_panel;
 mod legacy_color_panel;
 mod playlist_panel;
 mod start_time_panel;
+mod procedures_panel;
+mod operator_panel;
 
 pub use app::PlaybackApp;
 pub use sidebar::{AppView, Sidebar};
+pub use operator_panel::OperatorPanel;
 
 use thiserror::Error;
 

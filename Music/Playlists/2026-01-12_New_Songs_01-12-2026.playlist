@@ -1,0 +1,52 @@
+{
+  "name": "01-12-2026",
+  "date": "2026-01-12",
+  "theme": "New Songs",
+  "songs": [
+    {
+      "title": "Opening",
+      "path": "/Users/bradboyink/Desktop/GHMF Playback 2.0/Music/Open-Close/Opening.wav",
+      "duration_secs": 94
+    },
+    {
+      "title": "Believe",
+      "path": "/Users/bradboyink/Desktop/GHMF Playback 2.0/Music/Production/Believe.ctl",
+      "duration_secs": 234
+    },
+    {
+      "title": "Enjoy the Silence",
+      "path": "/Users/bradboyink/Desktop/GHMF Playback 2.0/Music/Production/Enjoy the Silence.ctl",
+      "duration_secs": 251
+    },
+    {
+      "title": "I Ran",
+      "path": "/Users/bradboyink/Desktop/GHMF Playback 2.0/Music/Production/I Ran.ctl",
+      "duration_secs": 218
+    },
+    {
+      "title": "Believe",
+      "path": "/Users/bradboyink/Desktop/GHMF Playback 2.0/Music/Production/Believe.ctl",
+      "duration_secs": 234
+    },
+    {
+      "title": "All Original",
+      "path": "/Users/bradboyink/Desktop/GHMF Playback 2.0/Music/Production/All Original.ctl",
+      "duration_secs": 111
+    },
+    {
+      "title": "Enjoy the Silence",
+      "path": "/Users/bradboyink/Desktop/GHMF Playback 2.0/Music/Production/Enjoy the Silence.ctl",
+      "duration_secs": 251
+    },
+    {
+      "title": "Believe",
+      "path": "/Users/bradboyink/Desktop/GHMF Playback 2.0/Music/Production/Believe.ctl",
+      "duration_secs": 234
+    },
+    {
+      "title": "Closing",
+      "path": "/Users/bradboyink/Desktop/GHMF Playback 2.0/Music/Open-Close/Closing.wav",
+      "duration_secs": 66
+    }
+  ]
+}

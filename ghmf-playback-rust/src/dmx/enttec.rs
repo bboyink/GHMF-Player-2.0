@@ -70,6 +70,12 @@ impl EnttecDmxPro {
         self.universe.clear();
         debug!("DMX universe cleared");
     }
+    
+    /// Clear all DMX channels to 0 except those in the ignore list (1-indexed)
+    pub fn clear_except(&mut self, ignore_channels: &[u16]) {
+        self.universe.clear_except(ignore_channels);
+        debug!("DMX universe cleared (ignoring {} channels)", ignore_channels.len());
+    }
 
     /// Send the current DMX universe to the hardware
     pub fn send_dmx(&mut self) -> Result<(), DmxError> {

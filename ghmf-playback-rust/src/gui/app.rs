@@ -1,4 +1,4 @@
-use super::{playback_panel, lighting_panel, status_panel, settings_dialog, command_panel, theme, sidebar, dmx_map_panel, light_group_panel, legacy_color_panel, playlist_panel, start_time_panel};
+use super::{playback_panel, lighting_panel, status_panel, settings_dialog, command_panel, theme, sidebar, dmx_map_panel, light_group_panel, legacy_color_panel, playlist_panel, start_time_panel, procedures_panel, operator_panel};
 use crate::audio::AudioPlayer;
 use crate::dmx::{EnttecDmxPro, DmxUniverse};
 use crate::plc::{PlcClient, PlcStatus};
@@ -6,6 +6,7 @@ use crate::config::{Settings, CsvConfig};
 use crate::lighting::FixtureManager;
 use crate::commands::CtlFile;
 use egui::{CentralPanel, TopBottomPanel, SidePanel, Context, Color32, Stroke, Vec2};
+use egui_notify::Toasts;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 use std::path::PathBuf;
@@ -74,8 +75,20 @@ pub struct PlaybackApp {
     // Start Time Panel
     start_time_panel: start_time_panel::StartTimePanel,
     
+    // Procedures Panel
+    procedures_panel: procedures_panel::ProceduresPanel,
+    
     // Playlist Panel
     playlist_panel: playlist_panel::PlaylistPanel,
+    
+    // Operator Panel
+    operator_panel: operator_panel::OperatorPanel,
+    
+    // Playback Panel State
+    playback_panel_state: playback_panel::PlaybackPanelState,
+    
+    // Toast notifications
+    toasts: Toasts,
     
     // File dialog result channel
     folder_dialog_rx: Option<std::sync::mpsc::Receiver<(String, String)>>, // (folder_type, path)
@@ -119,7 +132,11 @@ impl Default for PlaybackApp {
             light_group_panel: light_group_panel::LightGroupPanel::new(),
             legacy_color_panel: legacy_color_panel::LegacyColorPanel::default(),
             start_time_panel: start_time_panel::StartTimePanel::new(),
+            procedures_panel: procedures_panel::ProceduresPanel::new(),
             playlist_panel: playlist_panel::PlaylistPanel::new(),
+            operator_panel: operator_panel::OperatorPanel::new(),
+            playback_panel_state: playback_panel::PlaybackPanelState::default(),
+            toasts: Toasts::default(),
             folder_dialog_rx: None,
         }
     }
@@ -265,6 +282,22 @@ impl PlaybackApp {
         self.status_message = message.to_string();
         self.status_type = status_type;
         self.status_time = Instant::now();
+        
+        // Also show toast notification
+        match status_type {
+            StatusType::Success => {
+                self.toasts.success(message);
+            }
+            StatusType::Error => {
+                self.toasts.error(message);
+            }
+            StatusType::Warning => {
+                self.toasts.warning(message);
+            }
+            StatusType::Info => {
+                self.toasts.info(message);
+            }
+        }
     }
     
     fn update_playback_state(&mut self) {
@@ -274,6 +307,7 @@ impl PlaybackApp {
                 self.is_paused = player.is_paused();
                 self.playback_position = player.get_position();
                 self.master_volume = player.get_volume();
+                self.playback_panel_state.left_volume = player.get_volume();
                 
                 // Check if we should execute commands
                 self.is_playing && !self.is_paused
@@ -388,7 +422,7 @@ impl PlaybackApp {
             .to_string();
         self.current_song_path = Some(song_path.clone());
         
-        // Load audio file into player
+        // Load audio file into player (but pause immediately - don't auto-play)
         let mut audio_loaded = false;
         let mut audio_error = None;
         
@@ -397,11 +431,12 @@ impl PlaybackApp {
                 let path_str = song_path.to_string_lossy();
                 match player.play(&path_str) {
                     Ok(_) => {
-                        info!("Audio loaded and playing: {}", path_str);
+                        // Audio player now starts paused by default
+                        info!("Audio loaded (paused, ready to play): {}", path_str);
                         audio_loaded = true;
                     }
                     Err(e) => {
-                        warn!("Failed to play audio: {}", e);
+                        warn!("Failed to load audio: {}", e);
                         audio_error = Some(format!("Audio error: {}", e));
                     }
                 }
@@ -409,8 +444,9 @@ impl PlaybackApp {
         }
         
         if audio_loaded {
-            self.is_playing = true;
-            self.is_paused = false;
+            self.is_playing = false;
+            self.is_paused = true; // Start paused
+            self.playback_position = Duration::from_secs(0); // Reset position
             self.last_command_time = 0;
             self.recent_commands.clear();
             self.set_status(
@@ -526,7 +562,43 @@ impl PlaybackApp {
     
     // View rendering methods
     fn show_operator_view(&mut self, ctx: &Context, ui: &mut egui::Ui) {
-        // Operator mode - Main playback interface
+        // Operator mode - New comprehensive operator interface
+        
+        // Update operator panel with procedures data and show start time
+        let procedures = self.procedures_panel.get_procedures();
+        let show_start_time = self.start_time_panel.get_today_start_time();
+        self.operator_panel.update_procedures(&procedures, &show_start_time);
+        
+        let selected_playlist_type = self.operator_panel.show(
+            ctx, 
+            ui, 
+            &mut self.is_playing, 
+            &mut self.is_paused,
+            self.playback_position,
+            self.playback_duration,
+            &self.current_song,
+            &self.current_playlist,
+            &self.audio_player,
+            &mut self.playback_panel_state,
+            &self.current_song_path,
+        );
+        
+        // If user selected a new playlist type, load the first song
+        if let Some(playlist_type) = selected_playlist_type {
+            if let Some(song_path) = self.operator_panel.get_first_song_from_playlist(&playlist_type) {
+                self.load_song(song_path);
+                self.current_playlist = playlist_type;
+                
+                // Load waveform for the new song
+                if let Some(ref song_path) = self.current_song_path {
+                    self.playback_panel_state.load_waveform(song_path);
+                }
+            }
+        }
+    }
+    
+    fn show_operator_view_old(&mut self, ctx: &Context, ui: &mut egui::Ui) {
+        // OLD Operator mode - Main playback interface
         
         // Command output panel (left side)
         SidePanel::left("command_panel_operator")
@@ -547,12 +619,13 @@ impl PlaybackApp {
                 ui,
                 &mut self.is_playing,
                 &mut self.is_paused,
-                &mut self.master_volume,
                 self.playback_position,
                 self.playback_duration,
                 &self.current_song,
                 &self.current_playlist,
                 &self.audio_player,
+                &mut self.playback_panel_state,
+                &self.current_song_path,
             );
             
             // File operations section
@@ -710,7 +783,13 @@ impl PlaybackApp {
                     let mut cleared = false;
                     if let Some(dmx) = &self.dmx_controller {
                         if let Ok(mut dmx) = dmx.lock() {
-                            dmx.clear();
+                            // Get channels that should be ignored during reset
+                            let ignore_channels = self.dmx_map_panel.get_ignore_reset_channels();
+                            if ignore_channels.is_empty() {
+                                dmx.clear();
+                            } else {
+                                dmx.clear_except(&ignore_channels);
+                            }
                             let _ = dmx.send_dmx();
                             cleared = true;
                         }
@@ -732,9 +811,9 @@ impl PlaybackApp {
                 &self.settings.production_folder,
                 &self.settings.testing_folder,
                 &self.settings.events_folder,
-                &self.settings.drone_folder,
-                &self.settings.open_close_folder,
-                &self.settings.playlist_folder
+                &self.settings.pre_show_folder,
+                &self.settings.playlist_folder,
+                &self.settings.open_close_folder
             );
             
             ui.add_space(20.0);
@@ -1096,9 +1175,79 @@ impl PlaybackApp {
                             });
                         }
                     });
+                    ui.add_space(15.0);
+                    
+                    ui.label(
+                        egui::RichText::new("Pre-Show Folder:")
+                            .size(14.0)
+                            .color(Color32::WHITE)
+                    );
+                    ui.add_space(5.0);
+                    ui.horizontal(|ui| {
+                        ui.add_sized([300.0, 24.0], 
+                            egui::TextEdit::singleline(&mut self.settings.pre_show_folder));
+                        let folder_btn = egui::Button::new(egui::RichText::new("📁").size(16.0))
+                            .min_size(egui::Vec2::new(24.0, 24.0))
+                            .frame(false)
+                            .fill(Color32::TRANSPARENT);
+                        if ui.add(folder_btn).clicked() {
+                            let current_dir = self.settings.pre_show_folder.clone();
+                            let (tx, rx) = std::sync::mpsc::channel();
+                            self.folder_dialog_rx = Some(rx);
+                            let ctx = ui.ctx().clone();
+                            std::thread::spawn(move || {
+                                if let Some(path) = rfd::FileDialog::new()
+                                    .set_directory(&current_dir)
+                                    .pick_folder() {
+                                    let _ = tx.send(("pre_show".to_string(), path.display().to_string()));
+                                    ctx.request_repaint();
+                                }
+                            });
+                        }
+                    });
                     ui.add_space(8.0);
                     ui.label(
                         egui::RichText::new("Paths for show files and configurations")
+                            .size(13.0)
+                            .color(theme::AppColors::TEXT_SECONDARY)
+                    );
+                });
+            
+            ui.add_space(20.0);
+            
+            // Drone Settings Card
+            egui::Frame::none()
+                .fill(theme::AppColors::SURFACE)
+                .stroke(Stroke::new(1.0, theme::AppColors::SURFACE_LIGHT))
+                .rounding(12.0)
+                .inner_margin(24.0)
+                .show(ui, |ui| {
+                    ui.label(
+                        egui::RichText::new("Drone Settings")
+                            .size(20.0)
+                            .strong()
+                            .color(theme::AppColors::CYAN)
+                    );
+                    ui.add_space(10.0);
+                    ui.add(egui::Separator::default().spacing(0.0));
+                    ui.add_space(15.0);
+                    
+                    ui.label(
+                        egui::RichText::new("Battery Warning (Songs Before Message):")
+                            .size(14.0)
+                            .color(Color32::WHITE)
+                    );
+                    ui.add_space(5.0);
+                    let mut warning_songs_str = self.settings.drone_battery_warning_songs.to_string();
+                    if ui.add_sized([120.0, 24.0], 
+                        egui::TextEdit::singleline(&mut warning_songs_str)).changed() {
+                        if let Ok(songs) = warning_songs_str.parse::<u32>() {
+                            self.settings.drone_battery_warning_songs = songs;
+                        }
+                    }
+                    ui.add_space(8.0);
+                    ui.label(
+                        egui::RichText::new("Number of songs before battery swap message appears")
                             .size(13.0)
                             .color(theme::AppColors::TEXT_SECONDARY)
                     );
@@ -1170,6 +1319,7 @@ impl eframe::App for PlaybackApp {
                     "drone" => self.settings.drone_folder = path,
                     "open_close" => self.settings.open_close_folder = path,
                     "playlist" => self.settings.playlist_folder = path,
+                    "pre_show" => self.settings.pre_show_folder = path,
                     _ => {}
                 }
                 self.folder_dialog_rx = None;
@@ -1208,6 +1358,11 @@ impl eframe::App for PlaybackApp {
                 if let Some(new_view) = self.sidebar.show(ctx, ui) {
                     // View changed
                     info!("Switched to view: {:?}", new_view);
+                    
+                    // If switching to Operator view, reload today's playlist
+                    if new_view == sidebar::AppView::Operator {
+                        self.operator_panel.load_todays_playlist();
+                    }
                 }
             });
         
@@ -1248,6 +1403,9 @@ impl eframe::App for PlaybackApp {
                 sidebar::AppView::SettingsStartTime => {
                     self.start_time_panel.show(ctx, ui);
                 }
+                sidebar::AppView::SettingsProcedures => {
+                    self.procedures_panel.show(ctx, ui);
+                }
                 sidebar::AppView::SettingsApp => {
                     self.show_settings_view(ctx, ui);
                 }
@@ -1284,6 +1442,9 @@ impl eframe::App for PlaybackApp {
                 self.show_about = false;
             }
         }
+        
+        // Show toast notifications on top of everything
+        self.toasts.show(ctx);
         
         // Request repaint for smooth animations
         ctx.request_repaint_after(Duration::from_millis(16)); // ~60fps

@@ -85,8 +85,7 @@ pub enum SongFolder {
     Production,
     Testing,
     Events,
-    Drone,
-    OpenClose,
+    PreShow,
 }
 
 impl SongFolder {
@@ -95,8 +94,7 @@ impl SongFolder {
             SongFolder::Production => "Production",
             SongFolder::Testing => "Testing",
             SongFolder::Events => "Events",
-            SongFolder::Drone => "Drone",
-            SongFolder::OpenClose => "Open-Close",
+            SongFolder::PreShow => "Pre-Show",
         }
     }
 }
@@ -110,6 +108,8 @@ pub struct PlaylistPanel {
     search_query: String,
     selected_folder: SongFolder,
     available_songs: Vec<Song>,
+    last_loaded_folder: String,
+    last_selected_folder: SongFolder,
     
     // Playlist being created
     playlist_songs: Vec<Song>,
@@ -140,6 +140,8 @@ impl Default for PlaylistPanel {
             search_query: String::new(),
             selected_folder: SongFolder::Production,
             available_songs: Vec::new(),
+            last_loaded_folder: String::new(),
+            last_selected_folder: SongFolder::Production,
             playlist_songs: Vec::new(),
             playlist_name: String::new(),
             playlist_theme: String::from("Other"),
@@ -160,7 +162,7 @@ impl PlaylistPanel {
         Self::default()
     }
     
-    pub fn show(&mut self, ui: &mut Ui, production_folder: &str, testing_folder: &str, events_folder: &str, drone_folder: &str, open_close_folder: &str, playlist_folder: &str) {
+    pub fn show(&mut self, ui: &mut Ui, production_folder: &str, testing_folder: &str, events_folder: &str, pre_show_folder: &str, playlist_folder: &str, open_close_folder: &str) {
         // Show popup if viewing a playlist
         if let Some(idx) = self.viewing_playlist {
             if idx < self.saved_playlists.len() {
@@ -233,16 +235,46 @@ impl PlaylistPanel {
         ui.separator();
         ui.add_space(10.0);
         
-        // Store folder paths
-        self.open_close_folder = open_close_folder.to_string();
+        // Load songs when folder or selected folder changes
+        let current_folder = match self.selected_folder {
+            SongFolder::Production => production_folder,
+            SongFolder::Testing => testing_folder,
+            SongFolder::Events => events_folder,
+            SongFolder::PreShow => pre_show_folder,
+        };
         
-        // Load songs when folder changes
-        self.load_songs_from_folder(production_folder, testing_folder, events_folder, drone_folder, open_close_folder);
+        if self.last_loaded_folder != current_folder || self.last_selected_folder != self.selected_folder {
+            self.load_songs_from_folder(production_folder, testing_folder, events_folder, pre_show_folder);
+            
+            // Handle folder change - auto-add opening/closing when switching to Production
+            if self.last_selected_folder != self.selected_folder {
+                if self.selected_folder == SongFolder::Production {
+                    // Switching to Production - auto-add opening and closing
+                    self.auto_add_opening_and_closing();
+                } else {
+                    // Switching away from Production - clear playlist
+                    self.playlist_songs.clear();
+                    self.has_closing_song = false;
+                }
+            }
+            
+            self.last_loaded_folder = current_folder.to_string();
+            self.last_selected_folder = self.selected_folder;
+        }
         
         // Load playlists when folder changes
         if self.playlist_folder != playlist_folder {
             self.playlist_folder = playlist_folder.to_string();
             self.saved_playlists = Playlist::load_all_from_folder(playlist_folder);
+        }
+        
+        // Update open_close_folder and auto-add if Production is selected and playlist is empty
+        if self.open_close_folder != open_close_folder {
+            self.open_close_folder = open_close_folder.to_string();
+            // If Production folder is selected and playlist is empty, auto-add opening/closing
+            if self.selected_folder == SongFolder::Production && self.playlist_songs.is_empty() {
+                self.auto_add_opening_and_closing();
+            }
         }
         
         ui.horizontal(|ui| {
@@ -265,7 +297,7 @@ impl PlaylistPanel {
                 ui.set_min_width(380.0);
                 ui.set_max_width(380.0);
                 
-                self.show_available_songs(ui, production_folder, testing_folder, events_folder, drone_folder, open_close_folder);
+                self.show_available_songs(ui, production_folder, testing_folder, events_folder, pre_show_folder);
                 ui.add_space(15.0);
                 self.show_selected_songs(ui);
             });
@@ -390,12 +422,23 @@ impl PlaylistPanel {
                                         .frame(false)
                                     ).clicked() {
                                         self.selected_date = date;
-                                        self.playlist_name = date.format("%m-%d-%Y").to_string();
+                                        // Set name based on selected folder
+                                        if self.selected_folder == SongFolder::PreShow {
+                                            self.playlist_name = "Pre-Show".to_string();
+                                        } else {
+                                            self.playlist_name = date.format("%m-%d-%Y").to_string();
+                                        }
                                         if !is_current_month {
                                             self.current_month = date.with_day(1).unwrap();
                                         }
-                                        // Auto-add opening and closing songs
-                                        self.auto_add_opening_and_closing();
+                                        // Auto-add opening and closing songs only when Production folder is selected
+                                        if self.selected_folder == SongFolder::Production {
+                                            self.auto_add_opening_and_closing();
+                                        } else {
+                                            // Clear playlist for non-production folders
+                                            self.playlist_songs.clear();
+                                            self.has_closing_song = false;
+                                        }
                                     }
                                 }
                             }
@@ -516,7 +559,21 @@ impl PlaylistPanel {
                     .selected_text(&self.playlist_theme)
                     .width(available_width)
                     .show_ui(ui, |ui| {
-                        // All themes
+                        // Special themes at the top (no date required)
+                        ui.label(
+                            RichText::new("Special Lists")
+                                .size(12.0)
+                                .strong()
+                                .color(theme::AppColors::YELLOW)
+                        );
+                        ui.selectable_value(&mut self.playlist_theme, "Testing".to_string(), "Testing");
+                        ui.selectable_value(&mut self.playlist_theme, "Pre-Show".to_string(), "Pre-Show");
+                        
+                        ui.add_space(5.0);
+                        ui.separator();
+                        ui.add_space(5.0);
+                        
+                        // All other themes
                         let mut themes = vec![
                             "1950s Night", "1960s Night", "1970s Night", "1980s Night", "1990s Night",
                             "2000s Night", "2020 - Music From This Deca...", "Abba", 
@@ -583,8 +640,11 @@ impl PlaylistPanel {
                 .rounding(8.0);
                 
                 if ui.add(create_button).clicked() && !self.playlist_songs.is_empty() {
-                    // Ensure playlist name is set
-                    if self.playlist_name.is_empty() {
+                    // Set name based on selected folder
+                    if self.selected_folder == SongFolder::PreShow {
+                        self.playlist_name = "Pre-Show".to_string();
+                        self.playlist_theme = "Pre-Show".to_string();
+                    } else if self.playlist_name.is_empty() {
                         self.playlist_name = self.selected_date.format("%m-%d-%Y").to_string();
                     }
                     self.create_or_update_playlist();
@@ -611,13 +671,12 @@ impl PlaylistPanel {
                     ui.selectable_value(&mut self.selected_folder, SongFolder::Production, "Production");
                     ui.selectable_value(&mut self.selected_folder, SongFolder::Testing, "Testing");
                     ui.selectable_value(&mut self.selected_folder, SongFolder::Events, "Events");
-                    ui.selectable_value(&mut self.selected_folder, SongFolder::Drone, "Drone");
-                    ui.selectable_value(&mut self.selected_folder, SongFolder::OpenClose, "Open-Close");
+                    ui.selectable_value(&mut self.selected_folder, SongFolder::PreShow, "Pre-Show");
                 });
         });
     }
     
-    fn show_available_songs(&mut self, ui: &mut Ui, production_folder: &str, testing_folder: &str, events_folder: &str, drone_folder: &str, open_close_folder: &str) {
+    fn show_available_songs(&mut self, ui: &mut Ui, production_folder: &str, testing_folder: &str, events_folder: &str, pre_show_folder: &str) {
         Frame::none()
             .fill(theme::AppColors::SURFACE)
             .stroke(Stroke::new(1.0, theme::AppColors::SURFACE_LIGHT))
@@ -656,8 +715,7 @@ impl PlaylistPanel {
                             ui.selectable_value(&mut self.selected_folder, SongFolder::Production, "Production");
                             ui.selectable_value(&mut self.selected_folder, SongFolder::Testing, "Testing");
                             ui.selectable_value(&mut self.selected_folder, SongFolder::Events, "Events");
-                            ui.selectable_value(&mut self.selected_folder, SongFolder::Drone, "Drone");
-                            ui.selectable_value(&mut self.selected_folder, SongFolder::OpenClose, "Open-Close");
+                            ui.selectable_value(&mut self.selected_folder, SongFolder::PreShow, "Pre-Show");
                         });
                 });
                 
@@ -735,7 +793,80 @@ impl PlaylistPanel {
                             
                             let mut to_view = None;
                             
-                            for (idx, playlist) in self.saved_playlists.iter().enumerate() {
+                            // Separate special lists (Testing and Pre-Show) from regular playlists
+                            let (mut special_lists, regular_playlists): (Vec<_>, Vec<_>) = self.saved_playlists.iter().enumerate()
+                                .partition(|(_, p)| p.theme == "Testing" || p.theme == "Pre-Show");
+                            
+                            // Sort special lists: Pre-Show first, then Testing
+                            special_lists.sort_by(|(_, a), (_, b)| {
+                                match (&a.theme[..], &b.theme[..]) {
+                                    ("Pre-Show", "Pre-Show") => std::cmp::Ordering::Equal,
+                                    ("Pre-Show", _) => std::cmp::Ordering::Less,
+                                    (_, "Pre-Show") => std::cmp::Ordering::Greater,
+                                    _ => std::cmp::Ordering::Equal,
+                                }
+                            });
+                            
+                            // Show Special Lists section
+                            if !special_lists.is_empty() {
+                                ui.label(
+                                    RichText::new("Special Lists")
+                                        .size(14.0)
+                                        .strong()
+                                        .color(theme::AppColors::YELLOW)
+                                );
+                                ui.add_space(5.0);
+                                
+                                for (idx, playlist) in special_lists {
+                                    ui.horizontal_top(|ui| {
+                                        ui.vertical(|ui| {
+                                            ui.label(
+                                                RichText::new(&playlist.theme)
+                                                    .size(14.0)
+                                                    .color(Color32::WHITE)
+                                            );
+                                            ui.horizontal(|ui| {
+                                                ui.label(
+                                                    RichText::new(Playlist::format_duration(playlist.total_duration()))
+                                                        .size(13.0)
+                                                        .color(Color32::WHITE)
+                                                );
+                                                
+                                                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                                                    ui.add_space(15.0);
+                                                    if ui.add(egui::Button::new("🗑").frame(false)).clicked() {
+                                                        to_delete = Some(idx);
+                                                    }
+                                                    ui.add_space(10.0);
+                                                    if ui.add(egui::Button::new("✏").frame(false)).clicked() {
+                                                        to_edit = Some(idx);
+                                                    }
+                                                    ui.add_space(10.0);
+                                                    if ui.add(egui::Button::new("👁").frame(false)).clicked() {
+                                                        to_view = Some(idx);
+                                                    }
+                                                });
+                                            });
+                                        });
+                                    });
+                                    ui.separator();
+                                }
+                                
+                                ui.add_space(10.0);
+                            }
+                            
+                            // Show regular playlists
+                            if !regular_playlists.is_empty() {
+                                ui.label(
+                                    RichText::new("Playlists")
+                                        .size(14.0)
+                                        .strong()
+                                        .color(theme::AppColors::CYAN)
+                                );
+                                ui.add_space(5.0);
+                            }
+                            
+                            for (idx, playlist) in regular_playlists {
                                 ui.horizontal_top(|ui| {
                                     ui.vertical(|ui| {
                                         ui.label(
@@ -779,7 +910,7 @@ impl PlaylistPanel {
                                 // Delete JSON file
                                 let folder = shellexpand::tilde(&self.playlist_folder).to_string();
                                 let safe_theme = playlist.theme.replace(" ", "_").replace("/", "-");
-                                let filename = format!("{}_{}_{}. playlist", 
+                                let filename = format!("{}_{}_{}.playlist", 
                                     playlist.date.format("%Y-%m-%d"),
                                     safe_theme,
                                     playlist.name.replace(" ", "_")
@@ -812,20 +943,22 @@ impl PlaylistPanel {
             });
     }
     
-    fn load_songs_from_folder(&mut self, production_folder: &str, testing_folder: &str, events_folder: &str, drone_folder: &str, open_close_folder: &str) {
+    fn load_songs_from_folder(&mut self, production_folder: &str, testing_folder: &str, events_folder: &str, pre_show_folder: &str) {
         let folder = match self.selected_folder {
             SongFolder::Production => production_folder,
             SongFolder::Testing => testing_folder,
             SongFolder::Events => events_folder,
-            SongFolder::Drone => drone_folder,
-            SongFolder::OpenClose => open_close_folder,
+            SongFolder::PreShow => pre_show_folder,
         };
+        
+        // Expand tilde in folder path
+        let folder = shellexpand::tilde(folder).to_string();
         
         // Clear and reload songs
         self.available_songs.clear();
         
         // Scan folder for .ctl files
-        if let Ok(entries) = std::fs::read_dir(folder) {
+        if let Ok(entries) = std::fs::read_dir(&folder) {
             for entry in entries.flatten() {
                 let path = entry.path();
                 if path.extension().and_then(|s| s.to_str()) == Some("ctl") {
@@ -930,7 +1063,7 @@ impl PlaylistPanel {
                 let old_playlist = &self.saved_playlists[idx];
                 let folder = shellexpand::tilde(&self.playlist_folder).to_string();
                 let safe_theme = old_playlist.theme.replace(" ", "_").replace("/", "-");
-                let filename = format!("{}_{}_{}. playlist", 
+                let filename = format!("{}_{}_{}.playlist", 
                     old_playlist.date.format("%Y-%m-%d"),
                     safe_theme,
                     old_playlist.name.replace(" ", "_")

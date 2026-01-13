@@ -1,0 +1,17 @@
+{
+  "name": "01-11-2026",
+  "date": "2026-01-11",
+  "theme": "New Wave",
+  "songs": [
+    {
+      "title": "Enjoy the Silence",
+      "path": "/Users/bradboyink/Desktop/GHMF Playback 2.0/Music/Production/Enjoy the Silence.ctl",
+      "duration_secs": 251
+    },
+    {
+      "title": "I Ran",
+      "path": "/Users/bradboyink/Desktop/GHMF Playback 2.0/Music/Production/I Ran.ctl",
+      "duration_secs": 218
+    }
+  ]
+}

@@ -12,6 +12,8 @@ pub struct AudioPlayer {
     sink: Arc<Mutex<Option<Sink>>>,
     current_volume: Arc<Mutex<f32>>,
     start_time: Arc<Mutex<Option<std::time::Instant>>>,
+    pause_time: Arc<Mutex<Option<std::time::Instant>>>,
+    accumulated_time: Arc<Mutex<Duration>>,
 }
 
 impl AudioPlayer {
@@ -27,6 +29,8 @@ impl AudioPlayer {
             sink: Arc::new(Mutex::new(None)),
             current_volume: Arc::new(Mutex::new(1.0)),
             start_time: Arc::new(Mutex::new(None)),
+            pause_time: Arc::new(Mutex::new(None)),
+            accumulated_time: Arc::new(Mutex::new(Duration::from_secs(0))),
         })
     }
 
@@ -53,15 +57,17 @@ impl AudioPlayer {
         let volume = *self.current_volume.lock().unwrap();
         sink.set_volume(volume);
 
-        // Add source and play
+        // Add source but START PAUSED - don't auto-play
         sink.append(source);
-        sink.play();
+        sink.pause();  // Start paused by default
 
-        // Store the sink and start time
+        // Store the sink and reset time tracking
         *self.sink.lock().unwrap() = Some(sink);
-        *self.start_time.lock().unwrap() = Some(std::time::Instant::now());
+        *self.start_time.lock().unwrap() = None;  // Not playing yet
+        *self.pause_time.lock().unwrap() = None;
+        *self.accumulated_time.lock().unwrap() = Duration::from_secs(0);
 
-        debug!("Audio playback started");
+        debug!("Audio loaded (paused, ready to play)");
         Ok(())
     }
 
@@ -91,15 +97,28 @@ impl AudioPlayer {
 
     pub fn pause(&self) {
         if let Some(sink) = self.sink.lock().unwrap().as_ref() {
-            sink.pause();
-            debug!("Audio paused");
+            if !sink.is_paused() {
+                // Accumulate time before pausing
+                if let Some(start) = *self.start_time.lock().unwrap() {
+                    let mut acc = self.accumulated_time.lock().unwrap();
+                    *acc += start.elapsed();
+                }
+                *self.start_time.lock().unwrap() = None;
+                *self.pause_time.lock().unwrap() = Some(std::time::Instant::now());
+                sink.pause();
+                debug!("Audio paused");
+            }
         }
     }
 
     pub fn resume(&self) {
         if let Some(sink) = self.sink.lock().unwrap().as_ref() {
-            sink.play();
-            debug!("Audio resumed");
+            if sink.is_paused() {
+                *self.start_time.lock().unwrap() = Some(std::time::Instant::now());
+                *self.pause_time.lock().unwrap() = None;
+                sink.play();
+                debug!("Audio resumed");
+            }
         }
     }
 
@@ -107,6 +126,8 @@ impl AudioPlayer {
         if let Some(sink) = self.sink.lock().unwrap().take() {
             sink.stop();
             *self.start_time.lock().unwrap() = None;
+            *self.pause_time.lock().unwrap() = None;
+            *self.accumulated_time.lock().unwrap() = Duration::from_secs(0);
             debug!("Audio stopped");
         }
     }
@@ -141,10 +162,14 @@ impl AudioPlayer {
     }
 
     pub fn get_position(&self) -> Duration {
+        let accumulated = *self.accumulated_time.lock().unwrap();
+        
         if let Some(start) = *self.start_time.lock().unwrap() {
-            start.elapsed()
+            // Currently playing - add elapsed time since resume
+            accumulated + start.elapsed()
         } else {
-            Duration::from_secs(0)
+            // Paused or stopped - return accumulated time only
+            accumulated
         }
     }
 }

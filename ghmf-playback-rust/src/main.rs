@@ -12,7 +12,8 @@ use anyhow::Result;
 use tracing::info;
 use tracing_subscriber;
 
-fn main() -> Result<()> {
+#[tokio::main]
+async fn main() -> Result<()> {
     // Initialize logging
     tracing_subscriber::fmt()
         .with_env_filter("ghmf_playback=debug,info")
