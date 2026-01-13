@@ -1,10 +1,12 @@
 mod player;
 mod decoder;
 mod waveform;
+mod scrolling_buffer;
 
 pub use player::AudioPlayer;
 pub use decoder::AudioDecoder;
 pub use waveform::{WaveformData};
+pub use scrolling_buffer::{ScrollingWaveformBuffer, BufferBuilder};
 
 use thiserror::Error;
 
