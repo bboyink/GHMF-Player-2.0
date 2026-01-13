@@ -386,18 +386,18 @@ fn show_scrolling_waveform(
     let pos_secs = playback_position.as_secs_f32();
     let dur_secs = playback_duration.as_secs_f32().max(1.0);
     
-    // Get waveform samples from optimized buffer
-    let waveform_samples = if let Some(ref buffer) = state.scrolling_buffer {
-        buffer.get_samples()
+    // Get full waveform data
+    let full_waveform = if let Some(ref wf) = state.waveform_data {
+        &wf.samples
     } else {
         // Fallback placeholder
-        vec![0.3; 700] // 100 samples per second * 7 seconds
+        return; // Don't render if no data
     };
     
-    let waveform_height = 120.0;
-    let timeline_height = 35.0;
+    let waveform_height = 160.0; // Increased for better visibility
+    let timeline_height = 40.0;
     let total_height = waveform_height + timeline_height;
-    let available_width = ui.available_width() * 0.9;
+    let available_width = ui.available_width() * 0.95;
     
     // Allocate space for waveform + timeline
     let (response, painter) = ui.allocate_painter(
@@ -419,14 +419,8 @@ fn show_scrolling_waveform(
     painter.rect_filled(waveform_rect, 3.0, Color32::from_rgb(15, 20, 30));
     painter.rect_filled(timeline_rect, 0.0, Color32::from_rgb(10, 15, 25));
     
-    // 7-second window parameters
+    // 7-second visible window
     let visible_duration = 7.0;
-    let samples_to_display = waveform_samples.len();
-    let samples_per_second = samples_to_display as f32 / visible_duration;
-    
-    // Calculate which portion of the full waveform to show based on playback position
-    // This creates the scrolling effect
-    let progress_ratio = (pos_secs / dur_secs).clamp(0.0, 1.0);
     
     // Calculate window start time (what time is shown at the left edge)
     let window_start_time = if pos_secs <= 1.0 {
@@ -454,42 +448,57 @@ fn show_scrolling_waveform(
         waveform_rect.min.x + (1.0 / visible_duration) * available_width
     };
     
-    // Calculate which samples from the buffer to display
-    // The buffer represents the full song, we need to extract the visible window
-    let buffer_progress = progress_ratio;
-    let window_progress_start = (window_start_time / dur_secs).clamp(0.0, 1.0);
-    let window_progress_end = (window_end_time / dur_secs).clamp(0.0, 1.0);
+    // Extract 7-second window from full waveform
+    let total_samples = full_waveform.len();
+    let samples_per_second = total_samples as f32 / dur_secs;
     
-    // Get the window of samples from the full buffer
-    let start_sample_idx = (window_progress_start * samples_to_display as f32) as usize;
-    let end_sample_idx = ((window_progress_end * samples_to_display as f32) as usize)
-        .min(samples_to_display);
+    // Calculate which samples to show (only 7 seconds worth)
+    let start_sample_idx = (window_start_time * samples_per_second) as usize;
+    let end_sample_idx = (window_end_time * samples_per_second) as usize;
+    let end_sample_idx = end_sample_idx.min(total_samples);
     
-    let visible_samples = if end_sample_idx > start_sample_idx {
-        &waveform_samples[start_sample_idx..end_sample_idx]
-    } else {
-        &waveform_samples[..]
-    };
+    if start_sample_idx >= total_samples || end_sample_idx <= start_sample_idx {
+        return; // Invalid range
+    }
     
-    let visible_count = visible_samples.len().max(1);
-    let pixels_per_sample = available_width / visible_count as f32;
+    // Get only the visible 7-second window
+    let visible_samples = &full_waveform[start_sample_idx..end_sample_idx];
+    let num_bars = 140; // Number of bars to display (20 bars per second * 7 seconds)
+    let samples_per_bar = (visible_samples.len() as f32 / num_bars as f32).max(1.0) as usize;
+    let bar_width = available_width / num_bars as f32;
     
-    // Draw waveform bars
-    for (i, &amplitude) in visible_samples.iter().enumerate() {
-        let sample_time = window_start_time + (i as f32 / samples_per_second);
-        let x = waveform_rect.min.x + (i as f32 * pixels_per_sample);
+    // Draw waveform bars (downsample visible window to fixed number of bars)
+    for bar_idx in 0..num_bars {
+        let sample_start = bar_idx * samples_per_bar;
+        let sample_end = ((bar_idx + 1) * samples_per_bar).min(visible_samples.len());
         
-        let bar_height = (amplitude * waveform_height * 0.85).max(2.0);
+        if sample_start >= visible_samples.len() {
+            break;
+        }
         
-        // Color based on playback position (cyan for played, gray for unplayed)
-        let color = if sample_time <= pos_secs {
-            // Played - bright cyan
-            let intensity = (amplitude * 150.0) as u8 + 105;
-            Color32::from_rgb(0, intensity, 255)
+        // Calculate RMS for this bar
+        let bar_samples = &visible_samples[sample_start..sample_end];
+        let rms = if !bar_samples.is_empty() {
+            let sum: f32 = bar_samples.iter().map(|&s| s * s).sum();
+            (sum / bar_samples.len() as f32).sqrt()
         } else {
-            // Unplayed - dark gray
-            let intensity = (amplitude * 60.0) as u8 + 50;
-            Color32::from_rgb(40, 60, intensity)
+            0.0
+        };
+        
+        // Calculate time for this bar
+        let bar_time = window_start_time + (bar_idx as f32 * visible_duration / num_bars as f32);
+        let x = waveform_rect.min.x + (bar_idx as f32 * bar_width);
+        
+        // Much larger bar height for visibility (matching second screenshot style)
+        let bar_height = (rms * waveform_height * 0.95).max(3.0);
+        
+        // Color based on playback position (bright cyan for played, lighter gray for unplayed)
+        let color = if bar_time <= pos_secs {
+            // Played - bright cyan/blue (like second screenshot)
+            Color32::from_rgb(50, 180, 255)
+        } else {
+            // Unplayed - lighter gray for visibility
+            Color32::from_rgb(80, 100, 120)
         };
         
         // Draw bar from center outward (symmetric waveform)
@@ -497,20 +506,20 @@ fn show_scrolling_waveform(
         painter.rect_filled(
             Rect::from_min_max(
                 Pos2::new(x, center_y - bar_height / 2.0),
-                Pos2::new(x + pixels_per_sample.max(1.0), center_y + bar_height / 2.0)
+                Pos2::new(x + bar_width.max(1.5), center_y + bar_height / 2.0)
             ),
-            0.0,
+            1.0,
             color
         );
     }
     
-    // Draw playhead (red vertical line locked at 1-second mark during middle playback)
+    // Draw playhead (red vertical line)
     painter.line_segment(
         [
             Pos2::new(playhead_screen_x, waveform_rect.min.y),
             Pos2::new(playhead_screen_x, waveform_rect.max.y)
         ],
-        Stroke::new(3.0, Color32::from_rgb(255, 50, 50))
+        Stroke::new(3.0, Color32::from_rgb(255, 80, 80))
     );
     
     // Draw timeline with 1-second tick marks that scroll with the waveform
@@ -531,7 +540,7 @@ fn show_scrolling_waveform(
         painter.line_segment(
             [
                 Pos2::new(tick_x, timeline_rect.min.y + 5.0),
-                Pos2::new(tick_x, timeline_rect.min.y + 15.0)
+                Pos2::new(tick_x, timeline_rect.min.y + 20.0)
             ],
             Stroke::new(2.0, Color32::from_rgb(150, 170, 200))
         );
@@ -542,10 +551,10 @@ fn show_scrolling_waveform(
         let time_text = format!("{}:{:02}", minutes, seconds);
         
         painter.text(
-            Pos2::new(tick_x, timeline_rect.min.y + 18.0),
+            Pos2::new(tick_x, timeline_rect.min.y + 22.0),
             egui::Align2::CENTER_TOP,
             time_text,
-            egui::FontId::proportional(13.0),
+            egui::FontId::proportional(14.0),
             Color32::from_rgb(180, 200, 220)
         );
     }
