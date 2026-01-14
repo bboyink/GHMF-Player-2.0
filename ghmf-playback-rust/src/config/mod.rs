@@ -35,6 +35,8 @@ pub struct Settings {
     pub playlist_folder: String,
     #[serde(default = "default_pre_show_folder")]
     pub pre_show_folder: String,
+    #[serde(default = "default_announcements_folder")]
+    pub announcements_folder: String,
     #[serde(default = "default_drone_battery_warning_songs")]
     pub drone_battery_warning_songs: u32,
 }
@@ -71,6 +73,10 @@ fn default_pre_show_folder() -> String {
     "~/Pre-Show".to_string()
 }
 
+fn default_announcements_folder() -> String {
+    "~/Announcements".to_string()
+}
+
 fn default_drone_battery_warning_songs() -> u32 {
     3
 }
@@ -94,6 +100,7 @@ impl Default for Settings {
             open_close_folder: default_open_close_folder(),
             playlist_folder: default_playlist_folder(),
             pre_show_folder: default_pre_show_folder(),
+            announcements_folder: default_announcements_folder(),
             drone_battery_warning_songs: default_drone_battery_warning_songs(),
         }
     }

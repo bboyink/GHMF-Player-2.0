@@ -149,6 +149,9 @@ impl PlaybackApp {
         
         let mut app = Self::default();
         
+        // Set announcements folder from settings
+        app.playback_panel_state.announcements_folder = app.settings.announcements_folder.clone();
+        
         // Initialize systems
         app.initialize_audio();
         app.initialize_dmx();
@@ -310,6 +313,53 @@ impl PlaybackApp {
     }
     
     fn update_playback_state(&mut self) {
+        // Check if announcement finished and needs to resume playlist
+        if self.playback_panel_state.playing_announcement {
+            if let Some(player) = &self.audio_player {
+                if let Ok(player) = player.lock() {
+                    // Check if announcement finished (player is idle/stopped)
+                    if player.is_finished() {
+                        // Announcement finished - reload the playlist song and resume
+                        self.playback_panel_state.playing_announcement = false;
+                        self.playback_panel_state.announcement_path = None;
+                        
+                        // Reload the saved song and seek to saved position
+                        if let Some(ref song_path) = self.playback_panel_state.saved_song_path {
+                            let path_str = song_path.to_string_lossy();
+                            let song_path_clone = song_path.clone(); // Clone for later use
+                            if let Ok(_) = player.play(&path_str) {
+                                // Reload waveform for the show song (not for announcements)
+                                drop(player); // Release lock before loading waveform
+                                self.playback_panel_state.load_waveform(&song_path_clone);
+                                
+                                // Re-acquire lock for seek/resume
+                                if let Some(player) = &self.audio_player {
+                                    if let Ok(player) = player.lock() {
+                                        // Seek to saved position
+                                        let saved_pos = self.playback_panel_state.saved_position;
+                                        if saved_pos > Duration::from_secs(0) {
+                                            let _ = player.seek(saved_pos);
+                                        }
+                                        
+                                        // Resume if we were paused for announcement
+                                        if self.playback_panel_state.paused_for_announcement {
+                                            player.resume();
+                                            self.playback_panel_state.paused_for_announcement = false;
+                                            self.is_paused = false;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        
+                        // Clear saved state
+                        self.playback_panel_state.saved_position = Duration::from_secs(0);
+                        self.playback_panel_state.saved_song_path = None;
+                    }
+                }
+            }
+        }
+        
         let (should_execute_commands, song_finished) = if let Some(player) = &self.audio_player {
             if let Ok(player) = player.lock() {
                 let was_playing = self.is_playing;
@@ -690,16 +740,39 @@ impl PlaybackApp {
             }
         }
         
-        // If user selected a new playlist type, load the first song
+        // If user selected a new playlist type, load the playlist and first song
         if let Some(playlist_type) = selected_playlist_type {
-            if let Some(song_path) = self.operator_panel.get_first_song_from_playlist(&playlist_type) {
-                self.load_song(song_path);
-                self.current_playlist = playlist_type;
-                
-                // Load waveform for the new song
-                if let Some(ref song_path) = self.current_song_path {
-                    self.playback_panel_state.load_waveform(song_path);
+            // Load the appropriate playlist based on type
+            // Note: load_pre_show_playlist and load_todays_playlist do file I/O
+            // but are necessary to populate the playlist display
+            match playlist_type.as_str() {
+                "Pre-Show" => {
+                    self.operator_panel.load_pre_show_playlist();
+                    // Load first song from Pre-Show
+                    if let Some(song_path) = self.operator_panel.get_next_song_from_current_playlist() {
+                        self.load_song(song_path);
+                        self.current_playlist = playlist_type;
+                        
+                        // Load waveform for the new song
+                        if let Some(ref song_path) = self.current_song_path {
+                            self.playback_panel_state.load_waveform(song_path);
+                        }
+                    }
                 }
+                "Playlist" => {
+                    self.operator_panel.load_todays_playlist();
+                    // Load first song from today's playlist
+                    if let Some(song_path) = self.operator_panel.get_next_song_from_current_playlist() {
+                        self.load_song(song_path);
+                        self.current_playlist = playlist_type;
+                        
+                        // Load waveform for the new song
+                        if let Some(ref song_path) = self.current_song_path {
+                            self.playback_panel_state.load_waveform(song_path);
+                        }
+                    }
+                }
+                _ => {} // Testing or other types handled separately
             }
         }
     }
@@ -1312,6 +1385,36 @@ impl PlaybackApp {
                             });
                         }
                     });
+                    ui.add_space(15.0);
+                    
+                    ui.label(
+                        egui::RichText::new("Announcements Folder:")
+                            .size(14.0)
+                            .color(Color32::WHITE)
+                    );
+                    ui.add_space(5.0);
+                    ui.horizontal(|ui| {
+                        ui.add_sized([300.0, 24.0], 
+                            egui::TextEdit::singleline(&mut self.settings.announcements_folder));
+                        let folder_btn = egui::Button::new(egui::RichText::new("📁").size(16.0))
+                            .min_size(egui::Vec2::new(24.0, 24.0))
+                            .frame(false)
+                            .fill(Color32::TRANSPARENT);
+                        if ui.add(folder_btn).clicked() {
+                            let current_dir = self.settings.announcements_folder.clone();
+                            let (tx, rx) = std::sync::mpsc::channel();
+                            self.folder_dialog_rx = Some(rx);
+                            let ctx = ui.ctx().clone();
+                            std::thread::spawn(move || {
+                                if let Some(path) = rfd::FileDialog::new()
+                                    .set_directory(&current_dir)
+                                    .pick_folder() {
+                                    let _ = tx.send(("announcements".to_string(), path.display().to_string()));
+                                    ctx.request_repaint();
+                                }
+                            });
+                        }
+                    });
                     ui.add_space(8.0);
                     ui.label(
                         egui::RichText::new("Paths for show files and configurations")
@@ -1427,6 +1530,10 @@ impl eframe::App for PlaybackApp {
                     "open_close" => self.settings.open_close_folder = path,
                     "playlist" => self.settings.playlist_folder = path,
                     "pre_show" => self.settings.pre_show_folder = path,
+                    "announcements" => {
+                        self.settings.announcements_folder = path.clone();
+                        self.playback_panel_state.announcements_folder = path;
+                    }
                     _ => {}
                 }
                 self.folder_dialog_rx = None;

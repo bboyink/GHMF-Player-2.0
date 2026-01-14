@@ -10,10 +10,15 @@ pub struct PlaybackPanelState {
     pub right_volume: f32, // Fixed at 0.45 (45%)
     pub show_announcement_popup: bool,
     pub announcement_files: Vec<PathBuf>,
+    pub announcements_folder: String, // Path to announcements folder from settings
     pub selected_announcement: Option<usize>,
     pub paused_for_announcement: bool,
     pub announcement_player: Option<Arc<Mutex<AudioPlayer>>>,
     pub show_playing: bool, // Track if main show is playing
+    pub playing_announcement: bool, // Currently playing an announcement
+    pub announcement_path: Option<PathBuf>, // Path to current announcement
+    pub saved_position: Duration, // Position in song before announcement
+    pub saved_song_path: Option<PathBuf>, // Song path before announcement
     pub waveform_data: Option<WaveformData>, // Real waveform data from audio file
     pub scrolling_buffer: Option<ScrollingWaveformBuffer>, // Optimized scrolling buffer
 }
@@ -25,10 +30,15 @@ impl Default for PlaybackPanelState {
             right_volume: 0.45, // Fixed 45%
             show_announcement_popup: false,
             announcement_files: Vec::new(),
+            announcements_folder: "Music/Announcements".to_string(), // Default fallback
             selected_announcement: None,
             paused_for_announcement: false,
             announcement_player: None,
             show_playing: false,
+            playing_announcement: false,
+            announcement_path: None,
+            saved_position: Duration::from_secs(0),
+            saved_song_path: None,
             scrolling_buffer: None, // Will be created when waveform is loaded
             waveform_data: None, // Will be loaded when a song is loaded
         }
@@ -109,7 +119,7 @@ pub fn show(
         ui.add_space(15.0);
         
         // ============= 2. FULL WAVEFORM WITH MOVING PLAYHEAD =============
-        show_full_waveform(ui, state, playback_position, playback_duration, audio_player);
+        show_full_waveform(ui, state, playback_position, playback_duration, audio_player, *is_playing);
         
         ui.add_space(25.0);
         
@@ -240,7 +250,7 @@ pub fn show(
                 state.show_announcement_popup = true;
                 // Load announcement files
                 if state.announcement_files.is_empty() {
-                    state.announcement_files = load_announcement_files();
+                    state.announcement_files = load_announcement_files(&state.announcements_folder);
                 }
             }
         });
@@ -250,7 +260,7 @@ pub fn show(
     
     // ============= ANNOUNCEMENT POPUP MODAL =============
     if state.show_announcement_popup {
-        show_announcement_popup(ui.ctx(), state, audio_player, is_playing, is_paused);
+        show_announcement_popup(ui.ctx(), state, audio_player, is_playing, is_paused, playback_position, current_song_path);
     }
 }
 
@@ -261,26 +271,44 @@ fn format_duration(duration: Duration) -> String {
     format!("{:02}:{:02}", minutes, seconds)
 }
 
-fn load_announcement_files() -> Vec<PathBuf> {
-    let announcements_path = PathBuf::from("Music/Announcements");
+fn load_announcement_files(announcements_folder: &str) -> Vec<PathBuf> {
+    use tracing::warn;
     
+    // Expand tilde and validate path
+    let announcements_path = match shellexpand::tilde(announcements_folder).parse::<PathBuf>() {
+        Ok(path) => path,
+        Err(e) => {
+            warn!("Invalid announcements folder path '{}': {}", announcements_folder, e);
+            return Vec::new();
+        }
+    };
+    
+    // Check if path exists
     if !announcements_path.exists() {
+        warn!("Announcements folder does not exist: {:?}", announcements_path);
         return Vec::new();
     }
     
     let mut files = Vec::new();
     
-    if let Ok(entries) = std::fs::read_dir(&announcements_path) {
-        for entry in entries.flatten() {
-            let path = entry.path();
-            if path.is_file() {
-                if let Some(ext) = path.extension() {
-                    let ext_str = ext.to_string_lossy().to_lowercase();
-                    if ext_str == "wav" || ext_str == "mp3" {
-                        files.push(path);
+    // Try to read directory contents
+    match std::fs::read_dir(&announcements_path) {
+        Ok(entries) => {
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if path.is_file() {
+                    if let Some(ext) = path.extension() {
+                        let ext_str = ext.to_string_lossy().to_lowercase();
+                        if ext_str == "wav" || ext_str == "mp3" {
+                            files.push(path);
+                        }
                     }
                 }
             }
+        }
+        Err(e) => {
+            warn!("Failed to read announcements directory {:?}: {}", announcements_path, e);
+            return Vec::new();
         }
     }
     
@@ -295,6 +323,8 @@ fn show_announcement_popup(
     audio_player: &Option<Arc<Mutex<AudioPlayer>>>,
     is_playing: &mut bool,
     is_paused: &mut bool,
+    playback_position: Duration,
+    current_song_path: &Option<PathBuf>,
 ) {
     egui::Window::new("Announcements")
         .fixed_size([500.0, 400.0])
@@ -325,7 +355,11 @@ fn show_announcement_popup(
                                 let button_text = format!("🔊 {}", file_name);
                                 
                                 if ui.button(RichText::new(button_text).size(14.0)).clicked() {
-                                    // Pause current playback
+                                    // Save current playback state
+                                    state.saved_position = playback_position;
+                                    state.saved_song_path = current_song_path.clone();
+                                    
+                                    // Pause current playback if playing
                                     if *is_playing && !*is_paused {
                                         if let Some(player) = audio_player {
                                             if let Ok(player) = player.lock() {
@@ -336,17 +370,27 @@ fn show_announcement_popup(
                                         *is_paused = true;
                                     }
                                     
-                                    // Play announcement
-                                    // TODO: Create separate announcement player or use main player
+                                    // Play announcement (no CTL file needed)
                                     if let Some(player) = audio_player {
                                         if let Ok(player) = player.lock() {
                                             if let Some(path) = file.to_str() {
-                                                let _ = player.play(path);
+                                                match player.play(path) {
+                                                    Ok(_) => {
+                                                        player.resume(); // Start playing immediately
+                                                        state.playing_announcement = true;
+                                                        state.announcement_path = Some(file.clone());
+                                                    }
+                                                    Err(_) => {
+                                                        state.playing_announcement = false;
+                                                        state.announcement_path = None;
+                                                    }
+                                                }
                                             }
                                         }
                                     }
                                     
                                     state.selected_announcement = Some(idx);
+                                    state.show_announcement_popup = false; // Close popup after selection
                                 }
                                 
                                 ui.add_space(5.0);
@@ -398,6 +442,7 @@ fn show_full_waveform(
     playback_position: Duration,
     playback_duration: Duration,
     audio_player: &Option<Arc<Mutex<AudioPlayer>>>,
+    is_playing: bool,
 ) {
     let waveform_height = 60.0;
     let available_width = ui.available_width() * 0.95;
@@ -519,12 +564,14 @@ fn show_full_waveform(
         );
     }
     
-    // Draw playhead (red vertical line) - moves from left to right across full width
-    painter.line_segment(
-        [
-            Pos2::new(playhead_x, waveform_rect.min.y),
-            Pos2::new(playhead_x, waveform_rect.max.y)
-        ],
-        Stroke::new(3.0, Color32::from_rgb(255, 80, 80))
-    );
+    // Draw playhead (red vertical line) - only if not playing announcement
+    if is_playing && !state.playing_announcement {
+        painter.line_segment(
+            [
+                Pos2::new(playhead_x, waveform_rect.min.y),
+                Pos2::new(playhead_x, waveform_rect.max.y)
+            ],
+            Stroke::new(3.0, Color32::from_rgb(255, 80, 80))
+        );
+    }
 }

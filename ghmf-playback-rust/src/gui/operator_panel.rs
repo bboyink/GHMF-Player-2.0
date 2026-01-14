@@ -781,7 +781,7 @@ impl OperatorPanel {
             .resizable(false)
             .exact_width(280.0)
             .show_inside(ui, |ui| {
-                let (playlist, song_idx) = self.show_left_sidebar(ui);
+                let (playlist, song_idx) = self.show_left_sidebar(ui, *is_playing, *is_paused);
                 selected_playlist_type = playlist;
                 clicked_song_index = song_idx;
             });
@@ -813,7 +813,7 @@ impl OperatorPanel {
     
     /// Left sidebar with information cards
     /// Returns (Some(playlist_type), Some(song_index)) if user selected a new playlist or clicked a song
-    fn show_left_sidebar(&mut self, ui: &mut Ui) -> (Option<String>, Option<usize>) {
+    fn show_left_sidebar(&mut self, ui: &mut Ui, is_playing: bool, is_paused: bool) -> (Option<String>, Option<usize>) {
         let mut selected_playlist_type = None;
         let mut clicked_song_index = None;
         
@@ -850,12 +850,14 @@ impl OperatorPanel {
                     }
                     ui.add_space(15.0);
                     
-                    // 5. Start Show With Selector
-                    if let Some(playlist_type) = self.show_start_show_selector(ui) {
-                        // Return the playlist type to be handled in app.rs
-                        selected_playlist_type = Some(playlist_type);
+                    // 5. Start Show With Selector (only show when not playing, or when paused/stopped)
+                    if !is_playing || is_paused {
+                        if let Some(playlist_type) = self.show_start_show_selector(ui) {
+                            // Return the playlist type to be handled in app.rs
+                            selected_playlist_type = Some(playlist_type);
+                        }
+                        ui.add_space(10.0);
                     }
-                    ui.add_space(10.0);
                 });
         });
         
