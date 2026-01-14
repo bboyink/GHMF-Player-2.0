@@ -142,6 +142,7 @@ pub fn show(
     audio_player: &Option<Arc<Mutex<AudioPlayer>>>,
     state: &mut PlaybackPanelState,
     current_song_path: &Option<PathBuf>,
+    recent_commands: &[(u64, String)],
 ) {
     ui.vertical_centered(|ui| {
         ui.add_space(20.0);
@@ -343,6 +344,11 @@ pub fn show(
         });
         
         ui.add_space(20.0);
+        
+        // ============= 6. PLC OUTPUT =============
+        show_plc_output(ui, recent_commands);
+        
+        ui.add_space(20.0);
     });
     
     // ============= ANNOUNCEMENT POPUP MODAL =============
@@ -356,6 +362,94 @@ fn format_duration(duration: Duration) -> String {
     let minutes = secs / 60;
     let seconds = secs % 60;
     format!("{:02}:{:02}", minutes, seconds)
+}
+
+/// Format time in MM:SS.T format (tenths of seconds)
+fn format_time_with_tenths(time_ms: u64) -> String {
+    let total_secs = time_ms / 1000;
+    let tenths = (time_ms % 1000) / 100;
+    let minutes = total_secs / 60;
+    let seconds = total_secs % 60;
+    format!("{:02}:{:02}.{}", minutes, seconds, tenths)
+}
+
+/// Check if FCW address is a water command
+fn is_water_command(fcw_address: u16) -> bool {
+    (fcw_address >= 1 && fcw_address <= 13) ||
+    (fcw_address >= 217 && fcw_address <= 255) ||
+    (fcw_address >= 700 && fcw_address <= 896)
+}
+
+/// Show PLC output display
+fn show_plc_output(ui: &mut Ui, recent_commands: &[(u64, String)]) {
+    // Filter to only water commands and group by timestamp
+    let water_commands: Vec<(u64, Vec<&str>)> = {
+        let mut grouped = std::collections::HashMap::new();
+        
+        for (time_ms, cmd_desc) in recent_commands.iter() {
+            // Parse FCW address from command (format: XXX-YYY)
+            if let Some(dash_pos) = cmd_desc.find('-') {
+                if let Ok(fcw_address) = cmd_desc[..dash_pos].parse::<u16>() {
+                    if is_water_command(fcw_address) {
+                        grouped.entry(*time_ms)
+                            .or_insert_with(Vec::new)
+                            .push(cmd_desc.as_str());
+                    }
+                }
+            }
+        }
+        
+        let mut result: Vec<(u64, Vec<&str>)> = grouped.into_iter().collect();
+        result.sort_by_key(|(time, _)| *time);
+        result
+    };
+    
+    // Get waveform width (95% of available width, same as waveform)
+    let waveform_width = ui.available_width() * 0.95;
+    
+    // Center the card horizontally
+    ui.horizontal(|ui| {
+        ui.add_space((ui.available_width() - waveform_width) / 2.0);
+        
+        ui.vertical(|ui| {
+            ui.set_width(waveform_width);
+            
+            // PLC Output Card
+            egui::Frame::none()
+                .fill(theme::AppColors::SURFACE)
+                .stroke(egui::Stroke::new(1.0, theme::AppColors::SURFACE_LIGHT))
+                .rounding(8.0)
+                .inner_margin(12.0)
+                .show(ui, |ui| {
+                    ui.vertical(|ui| {
+                        ui.label(RichText::new("PLC Output").size(14.0).color(theme::AppColors::TEXT_SECONDARY));
+                        ui.add_space(8.0);
+                        
+                        if water_commands.is_empty() {
+                            ui.label(RichText::new("No water commands yet").size(12.0).color(theme::AppColors::TEXT_SECONDARY));
+                        } else {
+                            // Scrollable area for commands
+                            egui::ScrollArea::vertical()
+                                .max_height(150.0)
+                                .auto_shrink([false, false])
+                                .show(ui, |ui| {
+                                    for (time_ms, commands) in water_commands.iter().rev().take(20) {
+                                        // Format: MM:SS.T XXX-XXX XXX-XXX ...
+                                        let time_str = format_time_with_tenths(*time_ms);
+                                        let commands_str = commands.join(" ");
+                                        let line = format!("{} {}", time_str, commands_str);
+                                        
+                                        ui.label(RichText::new(line)
+                                            .size(12.0)
+                                            .color(theme::AppColors::TEXT_PRIMARY)
+                                            .family(egui::FontFamily::Monospace));
+                                    }
+                                });
+                        }
+                    });
+                });
+        });
+    });
 }
 
 fn load_announcement_files(announcements_folder: &str) -> Vec<PathBuf> {

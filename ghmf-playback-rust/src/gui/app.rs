@@ -718,6 +718,7 @@ impl PlaybackApp {
             &self.audio_player,
             &mut self.playback_panel_state,
             &self.current_song_path,
+            &self.recent_commands,
         );
         
         // If user clicked a song in the playlist, jump to that song
@@ -822,6 +823,7 @@ impl PlaybackApp {
                 &self.audio_player,
                 &mut self.playback_panel_state,
                 &self.current_song_path,
+                &self.recent_commands,
             );
             
             // File operations section

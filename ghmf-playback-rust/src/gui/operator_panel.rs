@@ -786,6 +786,7 @@ impl OperatorPanel {
         audio_player: &Option<Arc<Mutex<AudioPlayer>>>,
         playback_panel_state: &mut PlaybackPanelState,
         current_song_path: &Option<PathBuf>,
+        recent_commands: &[(u64, String)],
     ) -> (Option<String>, Option<usize>) {
         // Load icons if not already loaded
         self.load_rain_icon(ctx);
@@ -826,7 +827,7 @@ impl OperatorPanel {
         
         egui::CentralPanel::default().show_inside(ui, |ui| {
             self.show_main_content(ui, is_playing, is_paused, playback_position, playback_duration, 
-                current_song, current_playlist, audio_player, playback_panel_state, current_song_path);
+                current_song, current_playlist, audio_player, playback_panel_state, current_song_path, recent_commands);
         });
         
         // Announcement popup modal
@@ -914,6 +915,7 @@ impl OperatorPanel {
         audio_player: &Option<Arc<Mutex<AudioPlayer>>>,
         playback_panel_state: &mut PlaybackPanelState,
         current_song_path: &Option<PathBuf>,
+        recent_commands: &[(u64, String)],
     ) {
         egui::ScrollArea::vertical().show(ui, |ui| {
             // Use the Phase 3 playback panel for the main content
@@ -928,6 +930,7 @@ impl OperatorPanel {
                 audio_player,
                 playback_panel_state,
                 current_song_path,
+                recent_commands,
             );
             
             ui.add_space(30.0);
