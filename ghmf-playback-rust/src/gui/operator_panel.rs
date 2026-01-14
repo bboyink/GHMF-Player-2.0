@@ -212,7 +212,7 @@ impl OperatorPanel {
         let today = Local::now().date_naive();
         let playlist_folder = shellexpand::tilde("~/Desktop/GHMF Playback 2.0/Music/Playlists").to_string();
         
-        // Try to find Pre-Show playlist for today's date
+        // Try to find Pre-Show playlist (date-independent, same every day)
         if let Ok(entries) = fs::read_dir(&playlist_folder) {
             for entry in entries.flatten() {
                 let path = entry.path();
@@ -220,8 +220,8 @@ impl OperatorPanel {
                     // Read and parse the playlist file
                     if let Ok(content) = fs::read_to_string(&path) {
                         if let Ok(playlist) = serde_json::from_str::<crate::gui::playlist_panel::Playlist>(&content) {
-                            // Check if this is Pre-Show playlist for today
-                            if playlist.date == today && playlist.theme == "Pre-Show" {
+                            // Check if this is Pre-Show playlist (no date check - same every day)
+                            if playlist.theme == "Pre-Show" {
                                 // Convert songs to PlaylistSong format
                                 self.current_playlist = playlist.songs.iter().map(|song| {
                                     PlaylistSong {
