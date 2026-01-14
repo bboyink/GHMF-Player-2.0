@@ -135,10 +135,6 @@ pub struct OperatorPanel {
     wind_icon: Option<Arc<TextureHandle>>,
     list_icon: Option<Arc<TextureHandle>>,
     theme_icon: Option<Arc<TextureHandle>>,
-    weather_clock_icon: Option<Arc<TextureHandle>>,
-    
-    // UI state
-    show_forecast: bool,
 }
 
 impl Default for OperatorPanel {
@@ -194,8 +190,6 @@ impl Default for OperatorPanel {
             wind_icon: None,
             list_icon: None,
             theme_icon: None,
-            weather_clock_icon: None,
-            show_forecast: false,
         }
     }
 }
@@ -310,7 +304,17 @@ impl OperatorPanel {
         let today = Local::now().date_naive();
         let playlist_folder = shellexpand::tilde("~/Desktop/GHMF Playback 2.0/Music/Playlists").to_string();
         
+        // Clear current playlist before loading
+        self.current_playlist.clear();
+        self.total_runtime = Duration::from_secs(0);
+        self.remaining_time = Duration::from_secs(0);
+        self.current_playlist_date = None;
+        self.current_playlist_theme = None;
+        self.current_playlist_type = Some("Playlist".to_string());
+        self.current_song_index = 0;
+        
         // Try to find a playlist for today's date
+        let mut found = false;
         if let Ok(entries) = fs::read_dir(&playlist_folder) {
             for entry in entries.flatten() {
                 let path = entry.path();
@@ -318,6 +322,11 @@ impl OperatorPanel {
                     // Read and parse the playlist file
                     if let Ok(content) = fs::read_to_string(&path) {
                         if let Ok(playlist) = serde_json::from_str::<crate::gui::playlist_panel::Playlist>(&content) {
+                            // Skip Testing and Pre-Show playlists - only load date-specific playlists
+                            if playlist.theme == "Testing" || playlist.theme == "Pre-Show" {
+                                continue;
+                            }
+                            
                             // Check if this playlist is for today
                             if playlist.date == today {
                                 // Convert songs to PlaylistSong format
@@ -345,12 +354,18 @@ impl OperatorPanel {
                                 // Set to max value so first increment in get_next_song wraps to 0
                                 self.current_song_index = usize::MAX;
                                 
+                                found = true;
                                 break;
                             }
                         }
                     }
                 }
             }
+        }
+        
+        // If no playlist found for today, add a placeholder message
+        if !found {
+            eprintln!("No playlist found for today's date: {}", today.format("%Y-%m-%d"));
         }
     }
     
@@ -759,29 +774,6 @@ impl OperatorPanel {
         }
     }
     
-    /// Load weather clock icon texture
-    fn load_weather_clock_icon(&mut self, ctx: &Context) {
-        if self.weather_clock_icon.is_some() {
-            return;
-        }
-        
-        let icon_bytes = include_bytes!("../../assets/clock.png");
-        if let Ok(image) = image::load_from_memory(icon_bytes) {
-            let size = [image.width() as _, image.height() as _];
-            let image_buffer = image.to_rgba8();
-            let pixels = image_buffer.as_flat_samples();
-            let color_image = ColorImage::from_rgba_unmultiplied(size, pixels.as_slice());
-            
-            let texture = ctx.load_texture(
-                "weather_clock_icon",
-                color_image,
-                Default::default()
-            );
-            
-            self.weather_clock_icon = Some(Arc::new(texture));
-        }
-    }
-    
     /// Main UI render function
     /// Returns Some(playlist_type) if user selected a new playlist type to load
     pub fn show(&mut self, 
@@ -804,7 +796,6 @@ impl OperatorPanel {
         self.load_wind_icon(ctx);
         self.load_list_icon(ctx);
         self.load_theme_icon(ctx);
-        self.load_weather_clock_icon(ctx);
         
         // Check for weather updates from async task
         if let Ok(new_weather) = self.weather_rx.try_recv() {
@@ -1011,103 +1002,42 @@ impl OperatorPanel {
             .inner_margin(16.0)
             .show(ui, |ui| {
                 ui.vertical(|ui| {
-                    // Header with Weather text and clock icon on the right
-                    ui.horizontal(|ui| {
-                        ui.label(RichText::new("Weather")
-                            .size(16.0)
-                            .strong()
-                            .color(theme::AppColors::CYAN));
-                        
-                        // Spacer to push icon to the right
-                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                            if let Some(ref clock_icon) = self.weather_clock_icon {
-                                let image = egui::Image::new(clock_icon.as_ref())
-                                    .fit_to_exact_size(egui::Vec2::new(14.0, 14.0))
-                                    .tint(if self.show_forecast { 
-                                        theme::AppColors::CYAN 
-                                    } else { 
-                                        Color32::WHITE 
-                                    });
-                                let image_response = ui.add(image);
-                                if image_response.interact(egui::Sense::click()).clicked() {
-                                    self.show_forecast = !self.show_forecast;
-                                }
-                                if image_response.hovered() {
-                                    ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
-                                }
-                            }
-                        });
-                    });
+                    // Header with Weather text
+                    ui.label(RichText::new("Weather")
+                        .size(16.0)
+                        .strong()
+                        .color(theme::AppColors::CYAN));
+                    
                     ui.add_space(8.0);
                     
-                    // Toggle between current conditions and forecast
-                    if !self.show_forecast {
-                        // Current Conditions
-                        ui.label(RichText::new(&self.weather.conditions)
-                            .size(14.0)
-                            .color(Color32::WHITE));
-                        
-                        ui.add_space(4.0);
-                        
-                        // Temperature and Wind
-                        ui.horizontal(|ui| {
-                            // Temperature with icon
-                            if let Some(ref temp_icon) = self.temp_icon {
-                                let icon_size = egui::Vec2::new(16.0, 16.0);
-                                ui.add(egui::Image::new(temp_icon.as_ref()).fit_to_exact_size(icon_size).tint(Color32::WHITE));
-                            }
-                            ui.label(RichText::new(format!("Temp: {}°F", self.weather.temperature))
-                                .size(13.0)
-                                .color(Color32::WHITE));
-                            ui.add_space(8.0);
-                            
-                            // Wind with icon
-                            if let Some(ref wind_icon) = self.wind_icon {
-                                let icon_size = egui::Vec2::new(16.0, 16.0);
-                                ui.add(egui::Image::new(wind_icon.as_ref()).fit_to_exact_size(icon_size).tint(Color32::WHITE));
-                            }
-                            ui.label(RichText::new(format!("Wind: {} mph", self.weather.wind_speed))
-                                .size(13.0)
-                                .color(Color32::WHITE));
-                        });
-                    } else {
-                        // Two Hour Forecast
-                        if !self.weather.hourly_forecast.is_empty() {
-                            for forecast in &self.weather.hourly_forecast {
-                                ui.horizontal(|ui| {
-                                    ui.label(RichText::new(&forecast.time)
-                                        .size(12.0)
-                                        .color(theme::AppColors::TEXT_SECONDARY));
-                                    ui.label(RichText::new(format!("{}°F", forecast.temperature))
-                                        .size(12.0)
-                                        .color(Color32::WHITE));
-                                    ui.label(RichText::new(&forecast.short_forecast)
-                                        .size(12.0)
-                                        .color(theme::AppColors::TEXT_SECONDARY));
-                                    if let Some(precip) = forecast.precipitation_chance {
-                                        if precip > 0 {
-                                            ui.horizontal(|ui| {
-                                                ui.label(RichText::new(format!("{}%", precip))
-                                                    .size(12.0)
-                                                    .color(theme::AppColors::CYAN));
-                                                
-                                                // Show rain icon if loaded
-                                                if let Some(ref rain_icon) = self.rain_icon {
-                                                    let icon_size = egui::Vec2::new(16.0, 16.0);
-                                                    ui.add(egui::Image::new(rain_icon.as_ref()).fit_to_exact_size(icon_size));
-                                                }
-                                            });
-                                        }
-                                    }
-                                });
-                                ui.add_space(2.0);
-                            }
-                        } else {
-                            ui.label(RichText::new("No forecast data available")
-                                .size(12.0)
-                                .color(theme::AppColors::TEXT_SECONDARY));
+                    // Current Conditions
+                    ui.label(RichText::new(&self.weather.conditions)
+                        .size(14.0)
+                        .color(Color32::WHITE));
+                    
+                    ui.add_space(4.0);
+                    
+                    // Temperature and Wind
+                    ui.horizontal(|ui| {
+                        // Temperature with icon
+                        if let Some(ref temp_icon) = self.temp_icon {
+                            let icon_size = egui::Vec2::new(16.0, 16.0);
+                            ui.add(egui::Image::new(temp_icon.as_ref()).fit_to_exact_size(icon_size).tint(Color32::WHITE));
                         }
-                    }
+                        ui.label(RichText::new(format!("Temp: {}°F", self.weather.temperature))
+                            .size(13.0)
+                            .color(Color32::WHITE));
+                        ui.add_space(8.0);
+                        
+                        // Wind with icon
+                        if let Some(ref wind_icon) = self.wind_icon {
+                            let icon_size = egui::Vec2::new(16.0, 16.0);
+                            ui.add(egui::Image::new(wind_icon.as_ref()).fit_to_exact_size(icon_size).tint(Color32::WHITE));
+                        }
+                        ui.label(RichText::new(format!("Wind: {} mph", self.weather.wind_speed))
+                            .size(13.0)
+                            .color(Color32::WHITE));
+                    });
                 });
             });
     }

@@ -415,8 +415,11 @@ impl PlaybackApp {
             } else {
                 // No more songs - check if this was Pre-Show
                 if self.operator_panel.current_playlist_type.as_deref() == Some("Pre-Show") {
-                    // Pre-Show is complete - load today's playlist and auto-play
+                    // Pre-Show is complete - always load today's main playlist (never Testing)
                     self.operator_panel.load_todays_playlist();
+                    
+                    // Reset dropdown to Playlist selection
+                    self.operator_panel.selected_playlist_index = 1; // Index 1 = "Playlist"
                     
                     // Get first song from today's playlist
                     if let Some(song_path) = self.operator_panel.get_next_song_from_current_playlist() {
