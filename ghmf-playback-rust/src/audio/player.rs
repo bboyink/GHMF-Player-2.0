@@ -14,6 +14,7 @@ pub struct AudioPlayer {
     start_time: Arc<Mutex<Option<std::time::Instant>>>,
     pause_time: Arc<Mutex<Option<std::time::Instant>>>,
     accumulated_time: Arc<Mutex<Duration>>,
+    current_file: Arc<Mutex<Option<String>>>,
 }
 
 impl AudioPlayer {
@@ -31,6 +32,7 @@ impl AudioPlayer {
             start_time: Arc::new(Mutex::new(None)),
             pause_time: Arc::new(Mutex::new(None)),
             accumulated_time: Arc::new(Mutex::new(Duration::from_secs(0))),
+            current_file: Arc::new(Mutex::new(None)),
         })
     }
 
@@ -66,6 +68,7 @@ impl AudioPlayer {
         *self.start_time.lock().unwrap() = None;  // Not playing yet
         *self.pause_time.lock().unwrap() = None;
         *self.accumulated_time.lock().unwrap() = Duration::from_secs(0);
+        *self.current_file.lock().unwrap() = Some(path.to_string());
 
         debug!("Audio loaded (paused, ready to play)");
         Ok(())
@@ -121,6 +124,71 @@ impl AudioPlayer {
             }
         }
     }
+    
+    pub fn seek(&self, position: Duration) -> Result<(), AudioError> {
+        // Get the current file path
+        let file_path = if let Some(path) = self.current_file.lock().unwrap().clone() {
+            path
+        } else {
+            return Err(AudioError::DeviceError("No file loaded".to_string()));
+        };
+        
+        // Remember if we were playing
+        let was_playing = self.is_playing();
+        
+        // Stop current playback
+        if let Some(sink) = self.sink.lock().unwrap().take() {
+            sink.stop();
+        }
+        
+        // Reload the file
+        let file = BufReader::new(File::open(&file_path)?);
+        let source = Decoder::new(file)
+            .map_err(|e| AudioError::DecodeError(e.to_string()))?;
+        
+        // Skip to the desired position - this may skip past the end if position is too large
+        let source = source.skip_duration(position);
+        
+        // Create a new sink
+        let sink = Sink::try_new(&self.stream_handle)
+            .map_err(|e| AudioError::DeviceError(e.to_string()))?;
+        
+        // Apply current volume
+        let volume = *self.current_volume.lock().unwrap();
+        sink.set_volume(volume);
+        
+        // Add the source - if skip went past the end, this will be empty
+        sink.append(source);
+        
+        // Check if the sink is already empty (seeked past the end)
+        let is_empty = sink.empty();
+        
+        // If we were playing, resume; otherwise pause
+        if was_playing {
+            if is_empty {
+                // Seeked past the end - just set to end position and pause
+                *self.accumulated_time.lock().unwrap() = position;
+                *self.start_time.lock().unwrap() = None;
+                sink.pause();
+            } else {
+                sink.play();
+                // Set accumulated time and reset start time atomically
+                *self.accumulated_time.lock().unwrap() = position;
+                *self.start_time.lock().unwrap() = Some(std::time::Instant::now());
+                *self.pause_time.lock().unwrap() = None;
+            }
+        } else {
+            sink.pause();
+            *self.accumulated_time.lock().unwrap() = position;
+            *self.start_time.lock().unwrap() = None;
+        }
+        
+        // Store the new sink
+        *self.sink.lock().unwrap() = Some(sink);
+        
+        debug!("Seeked to position: {:?}", position);
+        Ok(())
+    }
 
     pub fn stop(&self) {
         if let Some(sink) = self.sink.lock().unwrap().take() {
@@ -158,6 +226,14 @@ impl AudioPlayer {
             sink.is_paused()
         } else {
             false
+        }
+    }
+    
+    pub fn is_finished(&self) -> bool {
+        if let Some(sink) = self.sink.lock().unwrap().as_ref() {
+            sink.empty()
+        } else {
+            true
         }
     }
 

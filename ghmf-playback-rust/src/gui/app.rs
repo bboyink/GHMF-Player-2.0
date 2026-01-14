@@ -155,6 +155,9 @@ impl PlaybackApp {
         app.initialize_plc();
         app.initialize_csv_config();
         
+        // Load first song from Pre-Show playlist if available
+        app.load_first_pre_show_song();
+        
         app
     }
     
@@ -162,11 +165,9 @@ impl PlaybackApp {
         match AudioPlayer::new() {
             Ok(player) => {
                 self.audio_player = Some(Arc::new(Mutex::new(player)));
-                self.set_status("Audio system initialized", StatusType::Success);
                 info!("Audio system initialized");
             }
             Err(e) => {
-                self.set_status(&format!("Audio init failed: {}", e), StatusType::Error);
                 warn!("Failed to initialize audio: {}", e);
             }
         }
@@ -191,11 +192,9 @@ impl PlaybackApp {
                 self.fixture_manager = Some(Arc::new(Mutex::new(fixture_manager)));
                 self.csv_config = Some(config_arc);
                 
-                self.set_status("Configuration loaded from Config/", StatusType::Success);
                 info!("Loaded CSV configuration from Config/");
             }
             Err(e) => {
-                self.set_status(&format!("Config load failed: {}", e), StatusType::Warning);
                 warn!("Failed to load CSV config: {}", e);
             }
         }
@@ -203,7 +202,6 @@ impl PlaybackApp {
     
     fn initialize_dmx(&mut self) {
         if !self.settings.dmx_enabled {
-            self.set_status("DMX disabled in settings", StatusType::Info);
             return;
         }
         
@@ -211,11 +209,9 @@ impl PlaybackApp {
             Ok(controller) => {
                 self.dmx_controller = Some(Arc::new(Mutex::new(controller)));
                 self.dmx_connected = true;
-                self.set_status("DMX controller connected", StatusType::Success);
                 info!("DMX controller initialized");
             }
             Err(e) => {
-                self.set_status(&format!("DMX init failed: {}", e), StatusType::Warning);
                 warn!("DMX initialization failed: {}", e);
             }
         }
@@ -270,11 +266,24 @@ impl PlaybackApp {
             
             self.plc_client = Some(plc_arc);
             self.plc_status = PlcStatus::Disconnected; // Will update to Connected once connection succeeds
-            self.set_status("PLC client initialized", StatusType::Info);
         } else {
             self.plc_client = Some(Arc::new(plc));
             self.plc_status = PlcStatus::Disabled;
-            self.set_status("PLC disabled in settings", StatusType::Info);
+        }
+    }
+    
+    fn load_first_pre_show_song(&mut self) {
+        // Try to get the first song from Pre-Show playlist
+        if let Some(song_path) = self.operator_panel.get_next_song_from_current_playlist() {
+            self.load_song(song_path.clone());
+            self.current_playlist = "Pre-Show".to_string();
+            
+            // Load waveform for the song
+            if let Some(ref song_path) = self.current_song_path {
+                self.playback_panel_state.load_waveform(song_path);
+            }
+            
+            // Don't auto-play on startup - user needs to press play
         }
     }
     
@@ -301,22 +310,97 @@ impl PlaybackApp {
     }
     
     fn update_playback_state(&mut self) {
-        let should_execute_commands = if let Some(player) = &self.audio_player {
+        let (should_execute_commands, song_finished) = if let Some(player) = &self.audio_player {
             if let Ok(player) = player.lock() {
+                let was_playing = self.is_playing;
+                let was_paused = self.is_paused;
                 self.is_playing = player.is_playing();
                 self.is_paused = player.is_paused();
                 self.playback_position = player.get_position();
                 self.master_volume = player.get_volume();
                 self.playback_panel_state.left_volume = player.get_volume();
                 
+                // Check if song finished by comparing position to waveform duration
+                let song_duration = if let Some(ref wf) = self.playback_panel_state.waveform_data {
+                    Duration::from_secs_f32(wf.duration_secs)
+                } else {
+                    Duration::from_secs(999999) // No waveform = treat as very long
+                };
+                
+                // Song finished if: was playing AND NOT currently paused AND reached the end
+                // Use a small buffer (0.5s) to detect near the end reliably
+                let near_end = song_duration.saturating_sub(Duration::from_millis(500));
+                let finished = was_playing && !self.is_paused && 
+                    self.playback_position >= near_end && 
+                    self.playback_position < song_duration + Duration::from_secs(2); // Prevent infinite detection
+                
                 // Check if we should execute commands
-                self.is_playing && !self.is_paused
+                (self.is_playing && !self.is_paused, finished)
             } else {
-                false
+                (false, false)
             }
         } else {
-            false
+            (false, false)
         };
+        
+        // Handle song finished outside the player lock to avoid borrow issues
+        if song_finished {
+            if let Some(song_path) = self.operator_panel.get_next_song_from_current_playlist() {
+                self.load_song(song_path.clone());
+                // Only load waveform if the song loaded successfully
+                if self.current_song_path.is_some() && self.audio_player.is_some() {
+                    if let Some(ref song_path) = self.current_song_path {
+                        self.playback_panel_state.load_waveform(song_path);
+                    }
+                    // Auto-play the next song (unless it's Opening)
+                    let is_opening = self.current_song.to_lowercase().contains("opening");
+                    if !is_opening {
+                        if let Some(player) = &self.audio_player {
+                            if let Ok(player) = player.lock() {
+                                player.resume();
+                            }
+                        }
+                    }
+                }
+            } else {
+                // No more songs - check if this was Pre-Show
+                if self.operator_panel.current_playlist_type.as_deref() == Some("Pre-Show") {
+                    // Pre-Show is complete - load today's playlist and auto-play
+                    self.operator_panel.load_todays_playlist();
+                    
+                    // Get first song from today's playlist
+                    if let Some(song_path) = self.operator_panel.get_next_song_from_current_playlist() {
+                        self.load_song(song_path.clone());
+                        self.current_playlist = "Playlist".to_string();
+                        
+                        // Load waveform for the new song
+                        if let Some(ref song_path) = self.current_song_path {
+                            self.playback_panel_state.load_waveform(song_path);
+                        }
+                        
+                        // Auto-play when transitioning from Pre-Show to main playlist
+                        if let Some(player) = &self.audio_player {
+                            if let Ok(player) = player.lock() {
+                                player.resume();
+                            }
+                        }
+                    }
+                } else {
+                    // Regular playlist is complete - show "Show Completed"
+                    if let Some(player) = &self.audio_player {
+                        if let Ok(player) = player.lock() {
+                            player.stop();
+                        }
+                    }
+                    self.current_song = "Show Completed".to_string();
+                    self.is_playing = false;
+                    self.is_paused = false;
+                    self.playback_position = Duration::from_secs(0);
+                    self.playback_duration = Duration::from_secs(0);
+                    self.playback_panel_state.clear_waveform();
+                }
+            }
+        }
         
         // Execute commands if playing (after releasing player lock)
         if should_execute_commands {
@@ -449,10 +533,6 @@ impl PlaybackApp {
             self.playback_position = Duration::from_secs(0); // Reset position
             self.last_command_time = 0;
             self.recent_commands.clear();
-            self.set_status(
-                &format!("Loaded: {}", self.current_song),
-                StatusType::Success
-            );
         } else if let Some(err_msg) = audio_error {
             self.set_status(&err_msg, StatusType::Warning);
         } else {
@@ -569,7 +649,11 @@ impl PlaybackApp {
         let show_start_time = self.start_time_panel.get_today_start_time();
         self.operator_panel.update_procedures(&procedures, &show_start_time);
         
-        let selected_playlist_type = self.operator_panel.show(
+        // Sync playback state for playlist highlighting
+        self.operator_panel.playback.is_playing = self.is_playing && !self.is_paused;
+        self.operator_panel.playback.current_position = self.playback_position;
+        
+        let (selected_playlist_type, clicked_song_index) = self.operator_panel.show(
             ctx, 
             ui, 
             &mut self.is_playing, 
@@ -582,6 +666,29 @@ impl PlaybackApp {
             &mut self.playback_panel_state,
             &self.current_song_path,
         );
+        
+        // If user clicked a song in the playlist, jump to that song
+        if let Some(song_index) = clicked_song_index {
+            if let Some(song_path) = self.operator_panel.jump_to_song(song_index) {
+                self.load_song(song_path.clone());
+                self.current_playlist = "Production".to_string(); // Or track the actual playlist type
+                
+                // Load waveform for the new song
+                if let Some(ref song_path) = self.current_song_path {
+                    self.playback_panel_state.load_waveform(song_path);
+                }
+                
+                // Auto-play the jumped-to song (unless it's Opening)
+                let is_opening = self.current_song.to_lowercase().contains("opening");
+                if !is_opening {
+                    if let Some(player) = &self.audio_player {
+                        if let Ok(player) = player.lock() {
+                            player.resume();
+                        }
+                    }
+                }
+            }
+        }
         
         // If user selected a new playlist type, load the first song
         if let Some(playlist_type) = selected_playlist_type {

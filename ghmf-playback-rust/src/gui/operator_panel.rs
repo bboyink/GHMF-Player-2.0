@@ -17,6 +17,7 @@ use std::fs;
 #[derive(Clone, Debug)]
 pub struct PlaylistSong {
     pub title: String,
+    pub path: PathBuf,
     pub duration: Duration,
     pub is_opening: bool,
     pub is_ending: bool,
@@ -105,6 +106,7 @@ pub struct OperatorPanel {
     pub current_playlist: Vec<PlaylistSong>,
     pub current_playlist_date: Option<String>,
     pub current_playlist_theme: Option<String>,
+    pub current_playlist_type: Option<String>, // "Pre-Show" or "Playlist" or "Testing"
     pub current_song_index: usize,
     pub total_runtime: Duration,
     pub remaining_time: Duration,
@@ -169,6 +171,7 @@ impl Default for OperatorPanel {
             current_playlist: Vec::new(),
             current_playlist_date: None,
             current_playlist_theme: None,
+            current_playlist_type: None,
             current_song_index: 0,
             total_runtime: Duration::from_secs(0),
             remaining_time: Duration::from_secs(0),
@@ -200,8 +203,57 @@ impl Default for OperatorPanel {
 impl OperatorPanel {
     pub fn new() -> Self {
         let mut panel = Self::default();
-        panel.load_todays_playlist();
+        panel.load_pre_show_playlist();
         panel
+    }
+    
+    /// Load Pre-Show playlist from the Music/Playlists folder
+    pub fn load_pre_show_playlist(&mut self) {
+        let today = Local::now().date_naive();
+        let playlist_folder = shellexpand::tilde("~/Desktop/GHMF Playback 2.0/Music/Playlists").to_string();
+        
+        // Try to find Pre-Show playlist for today's date
+        if let Ok(entries) = fs::read_dir(&playlist_folder) {
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if path.extension().and_then(|s| s.to_str()) == Some("playlist") {
+                    // Read and parse the playlist file
+                    if let Ok(content) = fs::read_to_string(&path) {
+                        if let Ok(playlist) = serde_json::from_str::<crate::gui::playlist_panel::Playlist>(&content) {
+                            // Check if this is Pre-Show playlist for today
+                            if playlist.date == today && playlist.theme == "Pre-Show" {
+                                // Convert songs to PlaylistSong format
+                                self.current_playlist = playlist.songs.iter().map(|song| {
+                                    PlaylistSong {
+                                        title: song.title.clone(),
+                                        path: song.path.clone(),
+                                        duration: Duration::from_secs(song.duration_secs as u64),
+                                        is_opening: false,
+                                        is_ending: false,
+                                    }
+                                }).collect();
+                                
+                                // Calculate total runtime
+                                self.total_runtime = Duration::from_secs(
+                                    playlist.songs.iter().map(|s| s.duration_secs as u64).sum()
+                                );
+                                self.remaining_time = self.total_runtime;
+                                
+                                // Store the date, theme, and type
+                                self.current_playlist_date = Some(today.format("%m-%d-%Y").to_string());
+                                self.current_playlist_theme = Some(playlist.theme.clone());
+                                self.current_playlist_type = Some("Pre-Show".to_string());
+                                
+                                // Set to max value so first increment in get_next_song wraps to 0
+                                self.current_song_index = usize::MAX;
+                                
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
     
     /// Load today's playlist from the Music/Playlists folder
@@ -223,6 +275,7 @@ impl OperatorPanel {
                                 self.current_playlist = playlist.songs.iter().map(|song| {
                                     PlaylistSong {
                                         title: song.title.clone(),
+                                        path: song.path.clone(),
                                         duration: Duration::from_secs(song.duration_secs as u64),
                                         is_opening: song.title == "Opening",
                                         is_ending: song.title == "Closing" || song.title == "Ending",
@@ -235,9 +288,13 @@ impl OperatorPanel {
                                 );
                                 self.remaining_time = self.total_runtime;
                                 
-                                // Store the date and theme
+                                // Store the date, theme, and type
                                 self.current_playlist_date = Some(today.format("%m-%d-%Y").to_string());
                                 self.current_playlist_theme = Some(playlist.theme.clone());
+                                self.current_playlist_type = Some("Playlist".to_string());
+                                
+                                // Set to max value so first increment in get_next_song wraps to 0
+                                self.current_song_index = usize::MAX;
                                 
                                 break;
                             }
@@ -315,6 +372,80 @@ impl OperatorPanel {
         } else {
             None
         }
+    }
+    
+    pub fn get_next_song_from_current_playlist(&mut self) -> Option<PathBuf> {
+        // Check if we have a loaded playlist
+        if self.current_playlist.is_empty() {
+            return None;
+        }
+        
+        // Move to next song in playlist (with wrapping for usize::MAX -> 0)
+        self.current_song_index = self.current_song_index.wrapping_add(1);
+        
+        // Check if we've reached the end
+        if self.current_song_index >= self.current_playlist.len() {
+            // Reset to beginning but don't loop
+            self.current_song_index = self.current_playlist.len() - 1;
+            return None; // Don't loop, stop at end
+        }
+        
+        // Get the next song path
+        let song = &self.current_playlist[self.current_song_index];
+        let mut path = song.path.clone();
+        
+        // If the path has .ctl extension, try to find corresponding .wav or .mp3
+        if path.extension().and_then(|s| s.to_str()) == Some("ctl") {
+            // Try .wav first
+            path.set_extension("wav");
+            if !path.exists() {
+                // Try .mp3
+                path.set_extension("mp3");
+                if !path.exists() {
+                    // If neither exists, try uppercase
+                    path.set_extension("WAV");
+                    if !path.exists() {
+                        path.set_extension("MP3");
+                    }
+                }
+            }
+        }
+        
+        Some(path)
+    }
+    
+    /// Jump to a specific song in the current playlist by index
+    pub fn jump_to_song(&mut self, index: usize) -> Option<PathBuf> {
+        // Check if we have a loaded playlist and the index is valid
+        if self.current_playlist.is_empty() || index >= self.current_playlist.len() {
+            return None;
+        }
+        
+        // Set the current song index
+        self.current_song_index = index;
+        
+        // Get the song path
+        let song = &self.current_playlist[self.current_song_index];
+        let mut path = song.path.clone();
+        
+        // If the path has .ctl extension, try to find corresponding .wav or .mp3
+        if path.extension().and_then(|s| s.to_str()) == Some("ctl") {
+            // Try .wav first
+            path.set_extension("wav");
+            if !path.exists() {
+                // Try .mp3
+                path.set_extension("mp3");
+                if !path.exists() {
+                    // If neither exists, try uppercase
+                    path.set_extension("WAV");
+                    if !path.exists() {
+                        path.set_extension("MP3");
+                    }
+                }
+            }
+        }
+        
+        Some(path)
     }
     
     /// Update procedures based on show start time
@@ -616,7 +747,7 @@ impl OperatorPanel {
         audio_player: &Option<Arc<Mutex<AudioPlayer>>>,
         playback_panel_state: &mut PlaybackPanelState,
         current_song_path: &Option<PathBuf>,
-    ) -> Option<String> {
+    ) -> (Option<String>, Option<usize>) {
         // Load icons if not already loaded
         self.load_rain_icon(ctx);
         self.load_arrow_icons(ctx);
@@ -643,13 +774,16 @@ impl OperatorPanel {
         ctx.request_repaint();
         
         let mut selected_playlist_type = None;
+        let mut clicked_song_index = None;
         
         // Main layout: horizontal split with sidebar on left, main content on right
         egui::SidePanel::left("operator_left_panel")
             .resizable(false)
             .exact_width(280.0)
             .show_inside(ui, |ui| {
-                selected_playlist_type = self.show_left_sidebar(ui);
+                let (playlist, song_idx) = self.show_left_sidebar(ui);
+                selected_playlist_type = playlist;
+                clicked_song_index = song_idx;
             });
         
         egui::CentralPanel::default().show_inside(ui, |ui| {
@@ -662,7 +796,7 @@ impl OperatorPanel {
             self.show_announcement_popup_window(ctx);
         }
         
-        selected_playlist_type
+        (selected_playlist_type, clicked_song_index)
     }
     
     /// Fetch weather data from weather.gov API for Grand Haven, MI 49417
@@ -678,9 +812,10 @@ impl OperatorPanel {
     }
     
     /// Left sidebar with information cards
-    /// Returns Some(playlist_type) if user selected a new playlist type to load
-    fn show_left_sidebar(&mut self, ui: &mut Ui) -> Option<String> {
+    /// Returns (Some(playlist_type), Some(song_index)) if user selected a new playlist or clicked a song
+    fn show_left_sidebar(&mut self, ui: &mut Ui) -> (Option<String>, Option<usize>) {
         let mut selected_playlist_type = None;
+        let mut clicked_song_index = None;
         
         egui::ScrollArea::vertical()
             .auto_shrink([false, false])
@@ -710,7 +845,9 @@ impl OperatorPanel {
                     ui.add_space(15.0);
                     
                     // 4. Playlist Display
-                    self.show_playlist_display(ui);
+                    if let Some(song_idx) = self.show_playlist_display(ui) {
+                        clicked_song_index = Some(song_idx);
+                    }
                     ui.add_space(15.0);
                     
                     // 5. Start Show With Selector
@@ -722,7 +859,7 @@ impl OperatorPanel {
                 });
         });
         
-        selected_playlist_type
+        (selected_playlist_type, clicked_song_index)
     }
     
     /// Main content area with playback controls and outputs
@@ -944,7 +1081,9 @@ impl OperatorPanel {
             });
     }
     
-    fn show_playlist_display(&mut self, ui: &mut Ui) {
+    fn show_playlist_display(&mut self, ui: &mut Ui) -> Option<usize> {
+        let mut clicked_song_index = None;
+        
         egui::Frame::none()
             .fill(theme::AppColors::SURFACE)
             .stroke(Stroke::new(1.0, theme::AppColors::SURFACE_LIGHT))
@@ -1005,9 +1144,11 @@ impl OperatorPanel {
                                     .color(theme::AppColors::TEXT_SECONDARY));
                             } else {
                                 for (index, song) in self.current_playlist.iter().enumerate() {
-                                    ui.horizontal(|ui| {
+                                    // Make each song row clickable
+                                    let is_current = index == self.current_song_index && self.playback.is_playing;
+                                    let response = ui.horizontal(|ui| {
                                         // Play indicator for current song
-                                        if index == self.current_song_index && self.playback.is_playing {
+                                        if is_current {
                                             ui.label(RichText::new("▶")
                                                 .size(12.0)
                                                 .color(Color32::from_rgb(0, 255, 0)));
@@ -1026,7 +1167,7 @@ impl OperatorPanel {
                                         
                                         ui.label(RichText::new(title)
                                             .size(13.0)
-                                            .color(if index == self.current_song_index && self.playback.is_playing {
+                                            .color(if is_current {
                                                 Color32::from_rgb(0, 255, 0)
                                             } else {
                                                 theme::AppColors::TEXT_SECONDARY
@@ -1039,13 +1180,25 @@ impl OperatorPanel {
                                         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                                             ui.label(RichText::new(duration_str)
                                                 .size(13.0)
-                                                .color(if index == self.current_song_index && self.playback.is_playing {
+                                                .color(if is_current {
                                                     Color32::from_rgb(0, 255, 0)
                                                 } else {
                                                     theme::AppColors::TEXT_SECONDARY
                                                 }));
                                         });
-                                    });
+                                    }).response;
+                                    
+                                    // Make the row clickable
+                                    let row_response = ui.interact(response.rect, ui.id().with(index), egui::Sense::click());
+                                    if row_response.clicked() {
+                                        clicked_song_index = Some(index);
+                                    }
+                                    
+                                    // Change cursor on hover
+                                    if row_response.hovered() {
+                                        ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
+                                    }
+                                    
                                     ui.add_space(4.0);
                                 }
                             }
@@ -1065,9 +1218,25 @@ impl OperatorPanel {
                             .color(theme::AppColors::TEXT_SECONDARY));
                         
                         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                            // Calculate remaining time: total - elapsed time from all songs
+                            let mut elapsed_total = Duration::from_secs(0);
+                            for i in 0..self.current_song_index {
+                                if i < self.current_playlist.len() {
+                                    elapsed_total += self.current_playlist[i].duration;
+                                }
+                            }
+                            // Add current song's elapsed time
+                            elapsed_total += self.playback.current_position;
+                            
+                            let remaining = if self.total_runtime > elapsed_total {
+                                self.total_runtime - elapsed_total
+                            } else {
+                                Duration::from_secs(0)
+                            };
+                            
                             let remaining_str = format!("Remaining: {}:{:02}",
-                                self.remaining_time.as_secs() / 60,
-                                self.remaining_time.as_secs() % 60);
+                                remaining.as_secs() / 60,
+                                remaining.as_secs() % 60);
                             ui.label(RichText::new(remaining_str)
                                 .size(14.0)
                                 .color(theme::AppColors::TEXT_SECONDARY));
@@ -1075,6 +1244,8 @@ impl OperatorPanel {
                     });
                 });
             });
+        
+        clicked_song_index
     }
     
     fn show_start_show_selector(&mut self, ui: &mut Ui) -> Option<String> {

@@ -52,9 +52,9 @@ impl PlaybackPanelState {
             }
             Err(e) => {
                 warn!("Failed to load waveform data: {}", e);
-                // Use placeholder on error
+                // Use placeholder on error with minimum duration to prevent overflow
                 let placeholder = WaveformData::placeholder(100);
-                let duration = placeholder.duration_secs;
+                let duration = placeholder.duration_secs.max(1.0); // At least 1 second
                 let builder = BufferBuilder::from_waveform(placeholder.samples.clone(), duration);
                 let buffer = builder.build(7.0);
                 
@@ -86,14 +86,30 @@ pub fn show(
     ui.vertical_centered(|ui| {
         ui.add_space(20.0);
         
+        // Remove file extension from song name
+        let song_name = current_song
+            .trim_end_matches(".wav")
+            .trim_end_matches(".mp3")
+            .trim_end_matches(".WAV")
+            .trim_end_matches(".MP3");
+        
         // ============= 1. NOW PLAYING HEADER =============
-        ui.heading(RichText::new(current_song).size(28.0).strong().color(theme::AppColors::TEXT_PRIMARY));
-        ui.label(RichText::new(format!("Playlist: {}", current_playlist)).size(16.0).color(theme::AppColors::TEXT_SECONDARY));
+        ui.heading(RichText::new(song_name).size(28.0).strong().color(theme::AppColors::TEXT_PRIMARY));
+        
+        // Show current time / total time (use waveform duration for accuracy)
+        let current_time = format_duration(playback_position);
+        let total_duration = if let Some(ref wf) = state.waveform_data {
+            Duration::from_secs_f32(wf.duration_secs)
+        } else {
+            playback_duration
+        };
+        let total_time = format_duration(total_duration);
+        ui.label(RichText::new(format!("{} / {}", current_time, total_time)).size(16.0).color(theme::AppColors::TEXT_SECONDARY));
         
         ui.add_space(15.0);
         
-        // ============= 2. WAVEFORM VISUALIZATION (7-SECOND SCROLLING VIEW) =============
-        show_scrolling_waveform(ui, state, playback_position, playback_duration);
+        // ============= 2. FULL WAVEFORM WITH MOVING PLAYHEAD =============
+        show_full_waveform(ui, state, playback_position, playback_duration, audio_player);
         
         ui.add_space(25.0);
         
@@ -375,109 +391,103 @@ fn show_announcement_popup(
         });
 }
 
-/// Render scrolling waveform with fixed playhead at 1-second mark
-/// Uses Scrollscope-inspired optimized buffer for smooth scrolling
-fn show_scrolling_waveform(
+/// Render full waveform with moving playhead
+fn show_full_waveform(
     ui: &mut Ui,
     state: &PlaybackPanelState,
     playback_position: Duration,
     playback_duration: Duration,
+    audio_player: &Option<Arc<Mutex<AudioPlayer>>>,
 ) {
-    let pos_secs = playback_position.as_secs_f32();
-    let dur_secs = playback_duration.as_secs_f32().max(1.0);
-    
-    // Get full waveform data
-    let full_waveform = if let Some(ref wf) = state.waveform_data {
-        &wf.samples
-    } else {
-        // Fallback placeholder
-        return; // Don't render if no data
-    };
-    
-    let waveform_height = 160.0; // Increased for better visibility
-    let timeline_height = 40.0;
-    let total_height = waveform_height + timeline_height;
+    let waveform_height = 60.0;
     let available_width = ui.available_width() * 0.95;
     
-    // Allocate space for waveform + timeline
+    // Allocate space for waveform with click sensing
     let (response, painter) = ui.allocate_painter(
-        Vec2::new(available_width, total_height),
-        Sense::hover()
+        Vec2::new(available_width, waveform_height),
+        Sense::click()
     );
     
-    let waveform_rect = Rect::from_min_size(
-        response.rect.min,
-        Vec2::new(available_width, waveform_height)
-    );
+    let waveform_rect = response.rect;
     
-    let timeline_rect = Rect::from_min_size(
-        Pos2::new(response.rect.min.x, response.rect.min.y + waveform_height),
-        Vec2::new(available_width, timeline_height)
-    );
-    
-    // Draw backgrounds
+    // Draw background
     painter.rect_filled(waveform_rect, 3.0, Color32::from_rgb(15, 20, 30));
-    painter.rect_filled(timeline_rect, 0.0, Color32::from_rgb(10, 15, 25));
     
-    // 7-second visible window
-    let visible_duration = 7.0;
-    
-    // Calculate window start time (what time is shown at the left edge)
-    let window_start_time = if pos_secs <= 1.0 {
-        // At beginning: playhead moves from 0 to 1 second
-        0.0
-    } else if pos_secs >= dur_secs - 6.0 {
-        // Near end: show last 7 seconds
-        (dur_secs - visible_duration).max(0.0)
-    } else {
-        // Middle: playhead locked at 1 second, window scrolls
-        pos_secs - 1.0
-    };
-    
-    let window_end_time = (window_start_time + visible_duration).min(dur_secs);
-    
-    // Playhead X position on screen
-    let playhead_screen_x = if pos_secs <= 1.0 {
-        // Playhead moves from left to the 1-second mark
-        waveform_rect.min.x + (pos_secs / visible_duration) * available_width
-    } else if pos_secs >= dur_secs - 6.0 {
-        // Near end: playhead continues moving right
-        waveform_rect.min.x + ((pos_secs - window_start_time) / visible_duration) * available_width
-    } else {
-        // Middle: playhead locked at 1-second mark
-        waveform_rect.min.x + (1.0 / visible_duration) * available_width
-    };
-    
-    // Extract 7-second window from full waveform
-    let total_samples = full_waveform.len();
-    let samples_per_second = total_samples as f32 / dur_secs;
-    
-    // Calculate which samples to show (only 7 seconds worth)
-    let start_sample_idx = (window_start_time * samples_per_second) as usize;
-    let end_sample_idx = (window_end_time * samples_per_second) as usize;
-    let end_sample_idx = end_sample_idx.min(total_samples);
-    
-    if start_sample_idx >= total_samples || end_sample_idx <= start_sample_idx {
-        return; // Invalid range
+    // Handle click to seek
+    if response.clicked() {
+        if let Some(click_pos) = response.interact_pointer_pos() {
+            // Calculate the relative position in the waveform
+            let click_x = click_pos.x - waveform_rect.min.x;
+            let progress = (click_x / available_width).clamp(0.0, 1.0);
+            
+            // Get duration from waveform data if available
+            if let Some(ref wf) = state.waveform_data {
+                let seek_time_secs = progress * wf.duration_secs;
+                // Clamp to leave at least 0.1 seconds before end to prevent seeking past end
+                let max_seek = (wf.duration_secs - 0.1).max(0.0);
+                let clamped_seek_time = seek_time_secs.min(max_seek);
+                let seek_duration = Duration::from_secs_f32(clamped_seek_time);
+                
+                // Seek the audio player
+                if let Some(player) = audio_player {
+                    if let Ok(player) = player.lock() {
+                        let _ = player.seek(seek_duration);
+                    }
+                }
+            }
+        }
     }
     
-    // Get only the visible 7-second window
-    let visible_samples = &full_waveform[start_sample_idx..end_sample_idx];
-    let num_bars = 140; // Number of bars to display (20 bars per second * 7 seconds)
-    let samples_per_bar = (visible_samples.len() as f32 / num_bars as f32).max(1.0) as usize;
-    let bar_width = available_width / num_bars as f32;
+    // If no waveform data, just show empty container and return
+    let (full_waveform, waveform_duration_secs) = if let Some(ref wf) = state.waveform_data {
+        (&wf.samples, wf.duration_secs)
+    } else {
+        // Show empty waveform container
+        return;
+    };
     
-    // Draw waveform bars (downsample visible window to fixed number of bars)
+    let pos_secs = playback_position.as_secs_f32();
+    let dur_secs = waveform_duration_secs.max(1.0);
+    
+    // Calculate playhead position based on waveform's actual duration
+    let playhead_progress = (pos_secs / dur_secs).min(1.0);
+    let playhead_x = waveform_rect.min.x + (playhead_progress * available_width);
+    
+    // Use thicker bars (2 pixels wide)
+    let num_bars = (available_width / 2.0) as usize;
+    let bar_width = 2.0;
+    
+    let total_samples = full_waveform.len();
+    if total_samples == 0 {
+        return;
+    }
+    
+    // Draw ALL bars across the full width - map entire song to full width
     for bar_idx in 0..num_bars {
-        let sample_start = bar_idx * samples_per_bar;
-        let sample_end = ((bar_idx + 1) * samples_per_bar).min(visible_samples.len());
+        // Map this bar position to sample position in the waveform
+        // Each bar represents a portion of the song
+        let bar_progress = bar_idx as f32 / num_bars as f32;
+        let sample_start = (bar_progress * total_samples as f32) as usize;
+        let next_bar_progress = (bar_idx + 1) as f32 / num_bars as f32;
+        let sample_end = (next_bar_progress * total_samples as f32) as usize;
+        let sample_end = sample_end.min(total_samples);
         
-        if sample_start >= visible_samples.len() {
-            break;
+        // Skip if we're out of range
+        if sample_start >= total_samples || sample_end <= sample_start {
+            // Draw empty bar to fill the space
+            painter.rect_filled(
+                Rect::from_min_max(
+                    Pos2::new(waveform_rect.min.x + (bar_idx as f32 * bar_width), waveform_rect.max.y - 2.0),
+                    Pos2::new(waveform_rect.min.x + ((bar_idx + 1) as f32 * bar_width), waveform_rect.max.y)
+                ),
+                0.0,
+                Color32::from_rgb(40, 50, 60)
+            );
+            continue;
         }
         
-        // Calculate RMS for this bar
-        let bar_samples = &visible_samples[sample_start..sample_end];
+        // Calculate RMS for this bar's samples
+        let bar_samples = &full_waveform[sample_start..sample_end];
         let rms = if !bar_samples.is_empty() {
             let sum: f32 = bar_samples.iter().map(|&s| s * s).sum();
             (sum / bar_samples.len() as f32).sqrt()
@@ -485,80 +495,36 @@ fn show_scrolling_waveform(
             0.0
         };
         
-        // Calculate time for this bar
-        let bar_time = window_start_time + (bar_idx as f32 * visible_duration / num_bars as f32);
         let x = waveform_rect.min.x + (bar_idx as f32 * bar_width);
         
-        // Much larger bar height for visibility (matching second screenshot style)
-        let bar_height = (rms * waveform_height * 0.95).max(3.0);
+        // Bar height from bottom - 3x scaling for tall bars, capped at 90% of container
+        let max_bar_height = waveform_height * 0.9;
+        let bar_height = (rms * waveform_height * 3.0).max(2.0).min(max_bar_height);
         
-        // Color based on playback position (bright cyan for played, lighter gray for unplayed)
-        let color = if bar_time <= pos_secs {
-            // Played - bright cyan/blue (like second screenshot)
-            Color32::from_rgb(50, 180, 255)
+        // Color based on playback progress: played (cyan) vs unplayed (gray)
+        let color = if bar_progress <= playhead_progress {
+            Color32::from_rgb(50, 180, 255) // Bright cyan for played
         } else {
-            // Unplayed - lighter gray for visibility
-            Color32::from_rgb(80, 100, 120)
+            Color32::from_rgb(80, 100, 120) // Gray for unplayed
         };
         
-        // Draw bar from center outward (symmetric waveform)
-        let center_y = waveform_rect.center().y;
+        // Draw bar from bottom up
         painter.rect_filled(
             Rect::from_min_max(
-                Pos2::new(x, center_y - bar_height / 2.0),
-                Pos2::new(x + bar_width.max(1.5), center_y + bar_height / 2.0)
+                Pos2::new(x, waveform_rect.max.y - bar_height),
+                Pos2::new(x + bar_width.max(1.0), waveform_rect.max.y)
             ),
-            1.0,
+            0.0,
             color
         );
     }
     
-    // Draw playhead (red vertical line)
+    // Draw playhead (red vertical line) - moves from left to right across full width
     painter.line_segment(
         [
-            Pos2::new(playhead_screen_x, waveform_rect.min.y),
-            Pos2::new(playhead_screen_x, waveform_rect.max.y)
+            Pos2::new(playhead_x, waveform_rect.min.y),
+            Pos2::new(playhead_x, waveform_rect.max.y)
         ],
         Stroke::new(3.0, Color32::from_rgb(255, 80, 80))
     );
-    
-    // Draw timeline with 1-second tick marks that scroll with the waveform
-    let start_second = window_start_time.floor() as i32;
-    let end_second = window_end_time.ceil() as i32;
-    
-    for tick_second in start_second..=end_second {
-        let tick_time = tick_second as f32;
-        
-        if tick_time < window_start_time || tick_time > window_end_time {
-            continue;
-        }
-        
-        let time_offset = tick_time - window_start_time;
-        let tick_x = waveform_rect.min.x + (time_offset / visible_duration) * available_width;
-        
-        // Draw tick mark
-        painter.line_segment(
-            [
-                Pos2::new(tick_x, timeline_rect.min.y + 5.0),
-                Pos2::new(tick_x, timeline_rect.min.y + 20.0)
-            ],
-            Stroke::new(2.0, Color32::from_rgb(150, 170, 200))
-        );
-        
-        // Draw time label (MM:SS format)
-        let minutes = tick_second / 60;
-        let seconds = tick_second % 60;
-        let time_text = format!("{}:{:02}", minutes, seconds);
-        
-        painter.text(
-            Pos2::new(tick_x, timeline_rect.min.y + 22.0),
-            egui::Align2::CENTER_TOP,
-            time_text,
-            egui::FontId::proportional(14.0),
-            Color32::from_rgb(180, 200, 220)
-        );
-    }
-    
-    // Request repaint for smooth scrolling animation
-    ui.ctx().request_repaint();
 }
