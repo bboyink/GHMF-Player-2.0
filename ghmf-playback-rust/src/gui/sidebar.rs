@@ -287,16 +287,17 @@ impl Sidebar {
                 } else {
                     // Fallback text
                     ui.label(
-                        egui::RichText::new("GHMF Playback")
+                        egui::RichText::new("Fountain Director")
                             .size(18.0)
                             .strong()
                             .color(AppColors::CYAN)
                     );
                 }
                 ui.label(
-                    egui::RichText::new("v2.0")
-                        .size(11.0)
-                        .color(AppColors::TEXT_SECONDARY)
+                    egui::RichText::new("v1.0")
+                        .size(16.0)
+                        .strong()
+                        .color(AppColors::CYAN)
                 );
             });
             

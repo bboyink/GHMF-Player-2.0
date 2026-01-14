@@ -1650,13 +1650,13 @@ impl eframe::App for PlaybackApp {
         if self.show_about {
             let should_close = std::cell::Cell::new(false);
             
-            egui::Window::new("About GHMF Playback")
+            egui::Window::new("About Fountain Director")
                 .open(&mut self.show_about)
                 .resizable(false)
                 .collapsible(false)
                 .show(ctx, |ui| {
                     ui.vertical_centered(|ui| {
-                        ui.heading("GHMF Playback 2.0");
+                        ui.heading("Fountain Director v1.0");
                         ui.add_space(10.0);
                         ui.label("Cross-platform fountain playback system");
                         ui.label("with synchronized audio and DMX lighting");

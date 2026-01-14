@@ -1,13 +1,12 @@
 use super::theme;
 use crate::audio::{AudioPlayer, WaveformData, ScrollingWaveformBuffer, BufferBuilder};
-use egui::{Ui, RichText, Slider, Button, Color32, Stroke, Rect, Pos2, Vec2, Sense};
+use egui::{Ui, RichText, Slider, Button, Color32, Stroke, Rect, Pos2, Vec2, Sense, TextureHandle, ColorImage};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use std::path::PathBuf;
 
 pub struct PlaybackPanelState {
     pub left_volume: f32,  // 0.0 to 1.0 (display as 0-100)
-    pub right_volume: f32, // Fixed at 0.45 (45%)
     pub show_announcement_popup: bool,
     pub announcement_files: Vec<PathBuf>,
     pub announcements_folder: String, // Path to announcements folder from settings
@@ -21,13 +20,14 @@ pub struct PlaybackPanelState {
     pub saved_song_path: Option<PathBuf>, // Song path before announcement
     pub waveform_data: Option<WaveformData>, // Real waveform data from audio file
     pub scrolling_buffer: Option<ScrollingWaveformBuffer>, // Optimized scrolling buffer
+    pub megaphone_icon: Option<Arc<TextureHandle>>, // Megaphone icon for announcements
+    pub audio_up_icon: Option<Arc<TextureHandle>>, // Audio up icon for volume
 }
 
 impl Default for PlaybackPanelState {
     fn default() -> Self {
         Self {
             left_volume: 0.35,  // Default 35%
-            right_volume: 0.45, // Fixed 45%
             show_announcement_popup: false,
             announcement_files: Vec::new(),
             announcements_folder: "Music/Announcements".to_string(), // Default fallback
@@ -41,6 +41,8 @@ impl Default for PlaybackPanelState {
             saved_song_path: None,
             scrolling_buffer: None, // Will be created when waveform is loaded
             waveform_data: None, // Will be loaded when a song is loaded
+            megaphone_icon: None, // Will be loaded on first use
+            audio_up_icon: None, // Will be loaded on first use
         }
     }
 }
@@ -78,6 +80,54 @@ impl PlaybackPanelState {
     pub fn clear_waveform(&mut self) {
         self.waveform_data = None;
         self.scrolling_buffer = None;
+    }
+    
+    /// Load megaphone icon (called lazily when needed)
+    pub fn load_megaphone_icon(&mut self, ctx: &egui::Context) {
+        if self.megaphone_icon.is_some() {
+            return; // Already loaded
+        }
+        
+        let icon_bytes = include_bytes!("../../assets/megaphone.png");
+        
+        if let Ok(image) = image::load_from_memory(icon_bytes) {
+            let rgba = image.to_rgba8();
+            let size = [rgba.width() as usize, rgba.height() as usize];
+            let pixels = rgba.as_flat_samples();
+            let color_image = ColorImage::from_rgba_unmultiplied(size, pixels.as_slice());
+            
+            let texture = ctx.load_texture(
+                "megaphone_icon",
+                color_image,
+                Default::default()
+            );
+            
+            self.megaphone_icon = Some(Arc::new(texture));
+        }
+    }
+    
+    /// Load audio up icon (called lazily when needed)
+    pub fn load_audio_up_icon(&mut self, ctx: &egui::Context) {
+        if self.audio_up_icon.is_some() {
+            return; // Already loaded
+        }
+        
+        let icon_bytes = include_bytes!("../../assets/audio_up.png");
+        
+        if let Ok(image) = image::load_from_memory(icon_bytes) {
+            let rgba = image.to_rgba8();
+            let size = [rgba.width() as usize, rgba.height() as usize];
+            let pixels = rgba.as_flat_samples();
+            let color_image = ColorImage::from_rgba_unmultiplied(size, pixels.as_slice());
+            
+            let texture = ctx.load_texture(
+                "audio_up_icon",
+                color_image,
+                Default::default()
+            );
+            
+            self.audio_up_icon = Some(Arc::new(texture));
+        }
     }
 }
 
@@ -123,76 +173,9 @@ pub fn show(
         
         ui.add_space(25.0);
         
-        // ============= 4. DUAL VOLUME CONTROLS =============
+        // ============= 4. ACTION BUTTONS =============
         ui.horizontal(|ui| {
-            ui.add_space((ui.available_width() - 700.0) / 2.0);
-            
-            // Left Volume Control (Interactive)
-            ui.vertical(|ui| {
-                ui.label(RichText::new("Left Volume").size(14.0).color(theme::AppColors::TEXT_SECONDARY));
-                ui.horizontal(|ui| {
-                    let volume_percent = (state.left_volume * 100.0) as i32;
-                    let slider = Slider::new(&mut state.left_volume, 0.0..=1.0)
-                        .text(format!("{}%", volume_percent))
-                        .custom_formatter(|val, _| format!("{:.0}%", val * 100.0));
-                    
-                    if ui.add_sized([250.0, 20.0], slider).changed() {
-                        // Apply volume to audio player
-                        if let Some(player) = audio_player {
-                            if let Ok(player) = player.lock() {
-                                player.set_volume(state.left_volume);
-                            }
-                        }
-                    }
-                });
-            });
-            
-            ui.add_space(50.0);
-            
-            // Right Volume Display (Fixed, Non-Interactive)
-            ui.vertical(|ui| {
-                ui.label(RichText::new("Right Volume").size(14.0).color(theme::AppColors::TEXT_SECONDARY));
-                ui.horizontal(|ui| {
-                    let volume_percent = (state.right_volume * 100.0) as i32;
-                    
-                    // Display as a progress bar (non-interactive)
-                    ui.add_sized(
-                        [250.0, 20.0],
-                        egui::ProgressBar::new(state.right_volume)
-                            .text(format!("{}% (Fixed)", volume_percent))
-                    );
-                });
-            });
-        });
-        
-        ui.add_space(30.0);
-        
-        // ============= 5. ACTION BUTTONS =============
-        ui.horizontal(|ui| {
-            ui.add_space((ui.available_width() - 700.0) / 2.0);
-            
-            // Restart Button
-            let restart_button = Button::new(
-                RichText::new("⏮ Restart").size(16.0)
-            );
-            
-            if ui.add_sized([120.0, 60.0], restart_button).clicked() {
-                // Restart song from beginning by reloading
-                if let Some(path) = current_song_path {
-                    if let Some(player) = audio_player {
-                        if let Ok(player) = player.lock() {
-                            let path_str = path.to_string_lossy();
-                            let _ = player.play(&path_str);
-                            // Pause if not currently playing
-                            if !*is_playing || *is_paused {
-                                player.pause();
-                            }
-                        }
-                    }
-                }
-            }
-            
-            ui.add_space(10.0);
+            ui.add_space((ui.available_width() - 460.0) / 2.0);
             
             // Play/Pause Button (Large, Prominent)
             let play_pause_text = if *is_playing && !*is_paused {
@@ -241,18 +224,122 @@ pub fn show(
             
             ui.add_space(10.0);
             
-            // Announcement Button
-            let announcement_button = Button::new(
-                RichText::new("📢 Announcements").size(18.0)
-            );
+            // Load megaphone icon if not already loaded
+            state.load_megaphone_icon(ui.ctx());
             
-            if ui.add_sized([250.0, 60.0], announcement_button).clicked() {
+            // Announcement Button with icon
+            let announcement_button = Button::new(RichText::new("Announcements").size(18.0));
+            
+            let announcement_response = ui.add_sized([250.0, 60.0], announcement_button);
+            
+            // Draw megaphone icon on top of button (overlay)
+            if let Some(ref icon) = state.megaphone_icon {
+                let icon_size = egui::Vec2::new(20.0, 20.0);
+                let button_rect = announcement_response.rect;
+                let icon_pos = Pos2::new(
+                    button_rect.left() + 20.0,
+                    button_rect.center().y - icon_size.y / 2.0
+                );
+                let icon_rect = Rect::from_min_size(icon_pos, icon_size);
+                ui.put(icon_rect, egui::Image::new(icon.as_ref()).fit_to_exact_size(icon_size));
+            }
+            
+            if announcement_response.clicked() {
                 state.show_announcement_popup = true;
                 // Load announcement files
                 if state.announcement_files.is_empty() {
                     state.announcement_files = load_announcement_files(&state.announcements_folder);
                 }
             }
+        });
+        
+        ui.add_space(30.0);
+        
+        // ============= 5. FOUNTAIN VOLUME CONTROL =============
+        ui.horizontal(|ui| {
+            ui.add_space((ui.available_width() - 750.0) / 2.0);
+            
+            // Fountain Volume Control
+            ui.vertical(|ui| {
+                ui.label(RichText::new("Fountain Volume").size(14.0).color(theme::AppColors::TEXT_SECONDARY));
+                
+                // Allocate fixed height row and manually position everything
+                let row_height = 20.0;
+                let row_response = ui.allocate_response(
+                    egui::Vec2::new(ui.available_width(), row_height),
+                    egui::Sense::hover()
+                );
+                
+                let mut cursor_x = row_response.rect.left();
+                let top_y = row_response.rect.top();
+                
+                let volume_percent = (state.left_volume * 100.0) as i32;
+                
+                // Slider at exact position
+                let slider_rect = egui::Rect::from_min_size(
+                    egui::Pos2::new(cursor_x, top_y),
+                    egui::Vec2::new(300.0, row_height)
+                );
+                let mut slider_ui = ui.child_ui(slider_rect, egui::Layout::left_to_right(egui::Align::Min), None);
+                let slider = Slider::new(&mut state.left_volume, 0.0..=1.0).show_value(false);
+                let slider_response = slider_ui.add(slider);
+                if slider_response.changed() {
+                    if let Some(player) = audio_player {
+                        if let Ok(player) = player.lock() {
+                            player.set_volume(state.left_volume);
+                        }
+                    }
+                }
+                // Position percentage box 20px after the actual slider response rect
+                cursor_x = slider_response.rect.right() + 20.0;
+                
+                // Percentage box at exact position (after slider)
+                let perc_rect = egui::Rect::from_min_size(
+                    egui::Pos2::new(cursor_x, top_y),
+                    egui::Vec2::new(50.0, row_height)
+                );
+                let mut perc_ui = ui.child_ui(perc_rect, egui::Layout::centered_and_justified(egui::Direction::LeftToRight), None);
+                egui::Frame::none()
+                    .fill(theme::AppColors::SURFACE)
+                    .stroke(egui::Stroke::new(1.0, theme::AppColors::SURFACE_LIGHT))
+                    .show(&mut perc_ui, |ui| {
+                        ui.label(RichText::new(format!("{}%", volume_percent))
+                            .size(14.0)
+                            .color(theme::AppColors::TEXT_PRIMARY));
+                    });
+                cursor_x += 100.0; // 50px box + 50px spacing
+                
+                // Icon at exact position (after percentage)
+                state.load_audio_up_icon(ui.ctx());
+                if let Some(ref icon) = state.audio_up_icon {
+                    let icon_rect = egui::Rect::from_min_size(
+                        egui::Pos2::new(cursor_x, top_y),
+                        egui::Vec2::new(20.0, row_height)
+                    );
+                    let mut icon_ui = ui.child_ui(icon_rect, egui::Layout::left_to_right(egui::Align::Min), None);
+                    icon_ui.add(egui::Image::new(icon.as_ref()).fit_to_exact_size(egui::Vec2::new(20.0, 20.0)));
+                    cursor_x += 25.0;
+                }
+                
+                // Buttons 10px higher with 20px spacing
+                let button_y = top_y - 10.0;
+                for preset in [35, 45, 55, 65, 75] {
+                    let btn_rect = egui::Rect::from_min_size(
+                        egui::Pos2::new(cursor_x, button_y),
+                        egui::Vec2::new(45.0, row_height)
+                    );
+                    let mut btn_ui = ui.child_ui(btn_rect, egui::Layout::left_to_right(egui::Align::Min), None);
+                    if btn_ui.add_sized([45.0, row_height], Button::new(RichText::new(format!("{}%", preset)).size(12.0))).clicked() {
+                        state.left_volume = preset as f32 / 100.0;
+                        if let Some(player) = audio_player {
+                            if let Ok(player) = player.lock() {
+                                player.set_volume(state.left_volume);
+                            }
+                        }
+                    }
+                    cursor_x += 65.0; // 45px button + 20px spacing
+                }
+            });
         });
         
         ui.add_space(20.0);
@@ -455,8 +542,9 @@ fn show_full_waveform(
     
     let waveform_rect = response.rect;
     
-    // Draw background
+    // Draw background with dark gray border
     painter.rect_filled(waveform_rect, 3.0, Color32::from_rgb(15, 20, 30));
+    painter.rect_stroke(waveform_rect, 3.0, Stroke::new(2.0, Color32::from_rgb(60, 60, 60)));
     
     // Handle click to seek
     if response.clicked() {

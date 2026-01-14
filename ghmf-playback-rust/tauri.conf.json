@@ -6,8 +6,8 @@
     "distDir": "../ui"
   },
   "package": {
-    "productName": "GHMF Playback",
-    "version": "2.0.0"
+    "productName": "Fountain Director",
+    "version": "1.0.0"
   },
   "tauri": {
     "allowlist": {
@@ -67,7 +67,7 @@
         "fullscreen": false,
         "height": 975,
         "resizable": true,
-        "title": "GHMF Playback 2.0",
+        "title": "Fountain Director v1.0",
         "width": 1290,
         "minHeight": 600,
         "minWidth": 800

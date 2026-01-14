@@ -28,7 +28,7 @@ impl AudioPlayer {
             _stream: stream,
             stream_handle,
             sink: Arc::new(Mutex::new(None)),
-            current_volume: Arc::new(Mutex::new(1.0)),
+            current_volume: Arc::new(Mutex::new(0.35)),  // Default 35%
             start_time: Arc::new(Mutex::new(None)),
             pause_time: Arc::new(Mutex::new(None)),
             accumulated_time: Arc::new(Mutex::new(Duration::from_secs(0))),

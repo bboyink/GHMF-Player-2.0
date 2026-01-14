@@ -88,7 +88,6 @@ pub struct OperatorPanel {
     
     // Volume controls
     pub volume_left: f32,   // Controllable, starts at 35
-    pub volume_right: f32,  // Fixed at 45
     
     // Schedule information
     pub show_start_time: String, // HH:MM PM format
@@ -150,7 +149,6 @@ impl Default for OperatorPanel {
                 waveform_data: Vec::new(),
             },
             volume_left: 35.0,
-            volume_right: 45.0,
             show_start_time: "7:00 PM".to_string(),
             next_procedure: None, // Will be updated from procedures panel
             weather: WeatherInfo {
