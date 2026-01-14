@@ -772,7 +772,20 @@ impl PlaybackApp {
                         }
                     }
                 }
-                _ => {} // Testing or other types handled separately
+                "Testing" => {
+                    self.operator_panel.load_testing_playlist();
+                    // Load first song from Testing playlist
+                    if let Some(song_path) = self.operator_panel.get_next_song_from_current_playlist() {
+                        self.load_song(song_path);
+                        self.current_playlist = playlist_type;
+                        
+                        // Load waveform for the new song
+                        if let Some(ref song_path) = self.current_song_path {
+                            self.playback_panel_state.load_waveform(song_path);
+                        }
+                    }
+                }
+                _ => {} // Other types handled separately
             }
         }
     }
@@ -1573,9 +1586,13 @@ impl eframe::App for PlaybackApp {
                     // View changed
                     info!("Switched to view: {:?}", new_view);
                     
-                    // If switching to Operator view, reload today's playlist
+                    // If switching to Operator view, re-initialize as if app just loaded
                     if new_view == sidebar::AppView::Operator {
-                        self.operator_panel.load_todays_playlist();
+                        // Reset operator panel to fresh state
+                        self.operator_panel = crate::gui::operator_panel::OperatorPanel::new();
+                        
+                        // Load the first Pre-Show song without blocking
+                        self.load_first_pre_show_song();
                     }
                 }
             });

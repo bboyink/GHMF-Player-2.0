@@ -256,6 +256,55 @@ impl OperatorPanel {
         }
     }
     
+    /// Load Testing playlist from the Music/Playlists folder
+    pub fn load_testing_playlist(&mut self) {
+        let today = Local::now().date_naive();
+        let playlist_folder = shellexpand::tilde("~/Desktop/GHMF Playback 2.0/Music/Playlists").to_string();
+        
+        // Try to find Testing playlist (date-independent, same every day)
+        if let Ok(entries) = fs::read_dir(&playlist_folder) {
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if path.extension().and_then(|s| s.to_str()) == Some("playlist") {
+                    // Read and parse the playlist file
+                    if let Ok(content) = fs::read_to_string(&path) {
+                        if let Ok(playlist) = serde_json::from_str::<crate::gui::playlist_panel::Playlist>(&content) {
+                            // Check if this is Testing playlist (no date check - same every day)
+                            if playlist.theme == "Testing" {
+                                // Convert songs to PlaylistSong format
+                                self.current_playlist = playlist.songs.iter().map(|song| {
+                                    PlaylistSong {
+                                        title: song.title.clone(),
+                                        path: song.path.clone(),
+                                        duration: Duration::from_secs(song.duration_secs as u64),
+                                        is_opening: false,
+                                        is_ending: false,
+                                    }
+                                }).collect();
+                                
+                                // Calculate total runtime
+                                self.total_runtime = Duration::from_secs(
+                                    playlist.songs.iter().map(|s| s.duration_secs as u64).sum()
+                                );
+                                self.remaining_time = self.total_runtime;
+                                
+                                // Store the date, theme, and type
+                                self.current_playlist_date = Some(today.format("%m-%d-%Y").to_string());
+                                self.current_playlist_theme = Some(playlist.theme.clone());
+                                self.current_playlist_type = Some("Testing".to_string());
+                                
+                                // Set to max value so first increment in get_next_song wraps to 0
+                                self.current_song_index = usize::MAX;
+                                
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
     /// Load today's playlist from the Music/Playlists folder
     pub fn load_todays_playlist(&mut self) {
         let today = Local::now().date_naive();

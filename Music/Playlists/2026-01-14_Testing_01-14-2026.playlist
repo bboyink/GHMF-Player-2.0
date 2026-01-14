@@ -1,0 +1,17 @@
+{
+  "name": "01-14-2026",
+  "date": "2026-01-14",
+  "theme": "Testing",
+  "songs": [
+    {
+      "title": "I Ran",
+      "path": "/Users/bradboyink/Desktop/GHMF Playback 2.0/Music/Testing/I Ran.ctl",
+      "duration_secs": 218
+    },
+    {
+      "title": "Love My Way",
+      "path": "/Users/bradboyink/Desktop/GHMF Playback 2.0/Music/Testing/Love My Way.ctl",
+      "duration_secs": 209
+    }
+  ]
+}
