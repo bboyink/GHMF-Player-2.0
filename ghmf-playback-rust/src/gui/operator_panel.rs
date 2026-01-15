@@ -1,10 +1,11 @@
-use egui::{Context, Ui, Color32, Stroke, RichText, TextureHandle, ColorImage};
+use egui::{Context, Ui, Color32, Stroke, RichText, TextureHandle, ColorImage, Rect, Pos2, Vec2, Sense};
 use egui_extras::{Size, StripBuilder, TableBuilder, Column};
 use egui_plot::{Plot, Line, PlotPoints, Legend};
 use crate::gui::theme;
 use crate::gui::playback_panel::{self, PlaybackPanelState};
 use crate::gui::procedures_panel::ProcedureEntry;
 use crate::audio::AudioPlayer;
+use crate::lighting::FixtureManager;
 use std::time::Duration;
 use chrono::{Local, Timelike, NaiveTime, Datelike};
 use serde::{Deserialize, Serialize};
@@ -12,6 +13,7 @@ use std::sync::mpsc::{channel, Sender, Receiver};
 use std::sync::{Arc, Mutex};
 use std::path::PathBuf;
 use std::fs;
+use tracing::{info, warn};
 
 /// Represents a song in the playlist
 #[derive(Clone, Debug)]
@@ -71,6 +73,53 @@ pub struct DmxFixtureState {
     pub blue: u8,
 }
 
+/// Fixture information for grid display
+#[derive(Clone, Debug)]
+struct FixtureInfo {
+    id: u32,
+    name: String,
+}
+
+/// Lights layout configuration (matches lights_layout_panel)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct LightsLayout {
+    /// Map of "row_col" -> fixture_id
+    pub cells: std::collections::HashMap<String, u32>,
+}
+
+impl Default for LightsLayout {
+    fn default() -> Self {
+        Self {
+            cells: std::collections::HashMap::new(),
+        }
+    }
+}
+
+impl LightsLayout {
+    fn load() -> Self {
+        let config_path = "Config/lights_layout.json";
+        match fs::read_to_string(config_path) {
+            Ok(contents) => {
+                match serde_json::from_str(&contents) {
+                    Ok(layout) => layout,
+                    Err(e) => {
+                        warn!("Failed to parse lights layout config: {}", e);
+                        Self::default()
+                    }
+                }
+            }
+            Err(_) => {
+                Self::default()
+            }
+        }
+    }
+    
+    fn get_fixture_at(&self, row: usize, col: usize) -> Option<u32> {
+        let key = format!("{}_{}", row, col);
+        self.cells.get(&key).copied()
+    }
+}
+
 /// Playback state information
 #[derive(Clone, Debug)]
 pub struct PlaybackState {
@@ -121,6 +170,8 @@ pub struct OperatorPanel {
     
     // DMX Output
     pub dmx_fixtures: Vec<DmxFixtureState>,
+    pub available_fixtures: Vec<FixtureInfo>,
+    pub lights_layout: LightsLayout,
     
     // Start Show With selector
     pub available_playlists: Vec<String>,
@@ -175,6 +226,8 @@ impl Default for OperatorPanel {
             plc_log: Vec::new(),
             max_plc_log_entries: 50,
             dmx_fixtures: Vec::new(),
+            available_fixtures: Vec::new(),
+            lights_layout: LightsLayout::load(),
             available_playlists: vec![
                 "Pre-Show".to_string(),
                 "Playlist".to_string(),
@@ -298,9 +351,9 @@ impl OperatorPanel {
     }
     
     /// Load today's playlist from the Music/Playlists folder
-    pub fn load_todays_playlist(&mut self) {
+    pub fn load_todays_playlist(&mut self, playlist_folder: &str) {
         let today = Local::now().date_naive();
-        let playlist_folder = shellexpand::tilde("~/Desktop/GHMF Playback 2.0/Music/Playlists").to_string();
+        let playlist_folder = shellexpand::tilde(playlist_folder).to_string();
         
         // Clear current playlist before loading
         self.current_playlist.clear();
@@ -371,7 +424,7 @@ impl OperatorPanel {
     pub fn get_first_song_from_playlist(&self, playlist_type: &str) -> Option<PathBuf> {
         use std::fs;
         
-        let base_path = PathBuf::from("/Users/bradboyink/Desktop/GHMF Playback 2.0/Music");
+        let base_path = PathBuf::from(shellexpand::tilde("Music").to_string());
         
         match playlist_type {
             "Pre-Show" => {
@@ -787,7 +840,8 @@ impl OperatorPanel {
         playback_panel_state: &mut PlaybackPanelState,
         current_song_path: &Option<PathBuf>,
         recent_commands: &[(u64, String)],
-    ) -> (Option<String>, Option<usize>) {
+        fixture_manager: Option<&Arc<Mutex<FixtureManager>>>,
+    ) -> (Option<String>, Option<usize>, bool) { // Added bool for step button
         // Load icons if not already loaded
         self.load_rain_icon(ctx);
         self.load_arrow_icons(ctx);
@@ -814,6 +868,7 @@ impl OperatorPanel {
         
         let mut selected_playlist_type = None;
         let mut clicked_song_index = None;
+        let mut step_clicked = false;
         
         // Main layout: horizontal split with sidebar on left, main content on right
         egui::SidePanel::left("operator_left_panel")
@@ -826,8 +881,10 @@ impl OperatorPanel {
             });
         
         egui::CentralPanel::default().show_inside(ui, |ui| {
-            self.show_main_content(ui, is_playing, is_paused, playback_position, playback_duration, 
-                current_song, current_playlist, audio_player, playback_panel_state, current_song_path, recent_commands);
+            if self.show_main_content(ui, is_playing, is_paused, playback_position, playback_duration, 
+                current_song, current_playlist, audio_player, playback_panel_state, current_song_path, recent_commands, fixture_manager) {
+                step_clicked = true;
+            }
         });
         
         // Announcement popup modal
@@ -835,7 +892,7 @@ impl OperatorPanel {
             self.show_announcement_popup_window(ctx);
         }
         
-        (selected_playlist_type, clicked_song_index)
+        (selected_playlist_type, clicked_song_index, step_clicked)
     }
     
     /// Fetch weather data from weather.gov API for Grand Haven, MI 49417
@@ -904,6 +961,7 @@ impl OperatorPanel {
     }
     
     /// Main content area with playback controls and outputs
+    /// Returns true if step button was clicked
     fn show_main_content(&mut self, 
         ui: &mut Ui,
         is_playing: &mut bool,
@@ -916,10 +974,13 @@ impl OperatorPanel {
         playback_panel_state: &mut PlaybackPanelState,
         current_song_path: &Option<PathBuf>,
         recent_commands: &[(u64, String)],
-    ) {
+        fixture_manager: Option<&Arc<Mutex<FixtureManager>>>,
+    ) -> bool {
+        let mut step_clicked = false;
+        
         egui::ScrollArea::vertical().show(ui, |ui| {
             // Use the Phase 3 playback panel for the main content
-            playback_panel::show(
+            if playback_panel::show(
                 ui,
                 is_playing,
                 is_paused,
@@ -931,14 +992,18 @@ impl OperatorPanel {
                 playback_panel_state,
                 current_song_path,
                 recent_commands,
-            );
+            ) {
+                step_clicked = true;
+            }
             
-            ui.add_space(30.0);
+            ui.add_space(8.0);
             
             // 4. DMX Output Section
-            self.show_dmx_output(ui);
+            self.show_dmx_output(ui, fixture_manager, recent_commands);
             ui.add_space(20.0);
         });
+        
+        step_clicked
     }
     
     // Placeholder methods for each section - will implement in subsequent phases
@@ -1263,14 +1328,203 @@ impl OperatorPanel {
         playlist_to_load
     }
     
-    fn show_dmx_output(&mut self, ui: &mut Ui) {
+    fn show_dmx_output(&mut self, ui: &mut Ui, fixture_manager: Option<&Arc<Mutex<FixtureManager>>>, recent_commands: &[(u64, String)]) {
+        // Load fixtures if not already loaded
+        if self.available_fixtures.is_empty() {
+            self.load_fixtures();
+        }
+        
         egui::Frame::none()
             .fill(theme::AppColors::SURFACE)
             .stroke(Stroke::new(1.0, theme::AppColors::SURFACE_LIGHT))
             .rounding(8.0)
-            .inner_margin(16.0)
+            .inner_margin(12.0)
             .show(ui, |ui| {
-                ui.label("DMX Output - TBD");
+                ui.vertical(|ui| {
+                    ui.label(RichText::new("DMX Fixture Layout").size(14.0).color(theme::AppColors::TEXT_SECONDARY));
+                    ui.add_space(8.0);
+                    
+                    // Render the 27x6 grid
+                    self.render_fixture_grid(ui, fixture_manager);
+                    
+                    ui.add_space(12.0);
+                    
+                    // Show CTL command log
+                    self.render_ctl_command_log(ui, recent_commands);
+                });
+            });
+    }
+    
+    fn load_fixtures(&mut self) {
+        // Load fixtures from DMX map JSON
+        let dmx_map_path = "Config/dmx_mapping.json";
+        match fs::read_to_string(dmx_map_path) {
+            Ok(contents) => {
+                match serde_json::from_str::<serde_json::Value>(&contents) {
+                    Ok(json) => {
+                        if let Some(mappings) = json.get("mappings").and_then(|v| v.as_array()) {
+                            let mut fixtures: Vec<FixtureInfo> = mappings.iter()
+                                .filter_map(|f| {
+                                    let id = f.get("fixture_id").and_then(|id| id.as_u64()).map(|id| id as u32)?;
+                                    let name = f.get("fixture_name").and_then(|n| n.as_str()).unwrap_or("Unknown").to_string();
+                                    Some(FixtureInfo { id, name })
+                                })
+                                .collect();
+                            fixtures.sort_by_key(|f| f.id);
+                            self.available_fixtures = fixtures;
+                        }
+                    }
+                    Err(e) => {
+                        warn!("Failed to parse DMX mapping: {}", e);
+                    }
+                }
+            }
+            Err(e) => {
+                warn!("Failed to load DMX mapping: {}", e);
+            }
+        }
+    }
+    
+    fn render_fixture_grid(&self, ui: &mut Ui, fixture_manager: Option<&Arc<Mutex<FixtureManager>>>) {
+        const GRID_COLS: usize = 27;
+        const GRID_ROWS: usize = 6;
+        const CELL_SIZE: f32 = 28.0; // Slightly larger with minimal padding
+        const DEFAULT_BG: Color32 = Color32::from_rgb(40, 40, 40); // Dark gray
+        
+        // Render grid with transparent empty cells and minimal spacing
+        ui.style_mut().spacing.item_spacing = Vec2::new(0.5, 0.5); // Minimal padding between cells
+        
+        for row in 0..GRID_ROWS {
+            ui.horizontal(|ui| {
+                ui.spacing_mut().item_spacing = Vec2::new(0.5, 0.5); // Minimal spacing within row
+                
+                for col in 0..GRID_COLS {
+                    let fixture_id = self.lights_layout.get_fixture_at(row, col);
+                    
+                    let (bg_color, text_color, text) = if let Some(fid) = fixture_id {
+                        // Get current color from fixture manager (RGBW)
+                        let (bg, text_col) = if let Some(fm) = fixture_manager {
+                            if let Ok(fm_lock) = fm.lock() {
+                                if let Some((r, g, b, _w)) = fm_lock.get_fixture_color(fid as u16) {
+                                    let bg = Color32::from_rgb(r, g, b);
+                                    let text = Self::calculate_text_color(r, g, b);
+                                    (bg, text)
+                                } else {
+                                    (DEFAULT_BG, Color32::WHITE)
+                                }
+                            } else {
+                                (DEFAULT_BG, Color32::WHITE)
+                            }
+                        } else {
+                            (DEFAULT_BG, Color32::WHITE)
+                        };
+                        
+                        (bg, text_col, format!("{}", fid))
+                    } else {
+                        // Empty cell - transparent
+                        (Color32::TRANSPARENT, Color32::TRANSPARENT, "".to_string())
+                    };
+                    
+                    let cell_rect = Rect::from_min_size(
+                        ui.cursor().min,
+                        Vec2::new(CELL_SIZE, CELL_SIZE),
+                    );
+                    
+                    let response = ui.allocate_rect(cell_rect, Sense::hover());
+                    
+                    // Draw cell background (transparent for empty cells)
+                    if bg_color != Color32::TRANSPARENT {
+                        ui.painter().rect_filled(
+                            cell_rect,
+                            2.0,
+                            bg_color,
+                        );
+                        
+                        // Draw cell border only for non-empty cells
+                        ui.painter().rect_stroke(
+                            cell_rect,
+                            2.0,
+                            Stroke::new(0.5, theme::AppColors::SURFACE_LIGHT),
+                        );
+                        
+                        // Draw text centered
+                        if !text.is_empty() {
+                            ui.painter().text(
+                                cell_rect.center(),
+                                egui::Align2::CENTER_CENTER,
+                                &text,
+                                egui::FontId::proportional(9.0),
+                                text_color,
+                            );
+                        }
+                    }
+                }
+            });
+        }
+    }
+    
+    /// Calculate text color (white or black) based on background brightness
+    fn calculate_text_color(r: u8, g: u8, b: u8) -> Color32 {
+        // Calculate relative luminance using Rec. 709 coefficients
+        let luminance = 0.2126 * (r as f32) + 0.7152 * (g as f32) + 0.0722 * (b as f32);
+        
+        // Use white text on dark backgrounds, black on light
+        if luminance < 128.0 {
+            Color32::WHITE
+        } else {
+            Color32::BLACK
+        }
+    }
+    
+    /// Render CTL command log showing recent lighting commands in MM:SS.T > format
+    fn render_ctl_command_log(&self, ui: &mut Ui, recent_commands: &[(u64, String)]) {
+        // Create a fixed-height scrollable area for 2 lines
+        const LINE_HEIGHT: f32 = 16.0;
+        const VISIBLE_LINES: usize = 2;
+        const SCROLL_HEIGHT: f32 = LINE_HEIGHT * VISIBLE_LINES as f32;
+        
+        egui::Frame::none()
+            .fill(theme::AppColors::BACKGROUND)
+            .stroke(Stroke::new(1.0, theme::AppColors::SURFACE_LIGHT))
+            .rounding(4.0)
+            .inner_margin(8.0)
+            .show(ui, |ui| {
+                egui::ScrollArea::vertical()
+                    .max_height(SCROLL_HEIGHT)
+                    .auto_shrink([false, false])
+                    .show(ui, |ui| {
+                        if recent_commands.is_empty() {
+                            ui.label(RichText::new("No lighting commands").size(11.0).color(theme::AppColors::TEXT_SECONDARY));
+                        } else {
+                            // Group commands by timestamp
+                            use std::collections::HashMap;
+                            let mut grouped: HashMap<u64, Vec<String>> = HashMap::new();
+                            for (timestamp_ms, command) in recent_commands.iter() {
+                                grouped.entry(*timestamp_ms).or_insert_with(Vec::new).push(command.clone());
+                            }
+                            
+                            // Get unique timestamps sorted in reverse order (most recent first)
+                            let mut timestamps: Vec<u64> = grouped.keys().copied().collect();
+                            timestamps.sort_unstable_by(|a, b| b.cmp(a));
+                            
+                            // Display each timestamp with all its commands on one line
+                            for timestamp_ms in timestamps {
+                                if let Some(commands) = grouped.get(&timestamp_ms) {
+                                    // Convert milliseconds to MM:SS.T format
+                                    let total_seconds = (timestamp_ms as f64) / 1000.0;
+                                    let minutes = (total_seconds / 60.0).floor() as u64;
+                                    let seconds = (total_seconds % 60.0).floor() as u64;
+                                    let tenths = ((total_seconds % 1.0) * 10.0).floor() as u64;
+                                    
+                                    let time_str = format!("{:02}:{:02}.{}", minutes, seconds, tenths);
+                                    let commands_str = commands.join(", ");
+                                    let line = format!("{} > {}", time_str, commands_str);
+                                    
+                                    ui.label(RichText::new(line).size(11.0).color(theme::AppColors::TEXT_PRIMARY).monospace());
+                                }
+                            }
+                        }
+                    });
             });
     }
     

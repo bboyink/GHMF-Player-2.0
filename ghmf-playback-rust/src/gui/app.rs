@@ -420,7 +420,7 @@ impl PlaybackApp {
                 // No more songs - check if this was Pre-Show
                 if self.operator_panel.current_playlist_type.as_deref() == Some("Pre-Show") {
                     // Pre-Show is complete - always load today's main playlist (never Testing)
-                    self.operator_panel.load_todays_playlist();
+                    self.operator_panel.load_todays_playlist(&self.settings.playlist_folder);
                     
                     // Reset dropdown to Playlist selection
                     self.operator_panel.selected_playlist_index = 1; // Index 1 = "Playlist"
@@ -476,12 +476,38 @@ impl PlaybackApp {
     
     fn update_dmx_state(&mut self) {
         if self.dmx_last_update.elapsed() > Duration::from_millis(50) {
+            // Update fades first
+            if let Some(fm) = &self.fixture_manager {
+                fm.lock().unwrap().update_fades();
+            }
+            
+            // Send updated DMX with interpolated fade values
             if let Some(dmx) = &self.dmx_controller {
-                if let Ok(mut dmx) = dmx.lock() {
-                    let _ = dmx.send_dmx();
-                    self.dmx_last_update = Instant::now();
+                if let Some(fm) = &self.fixture_manager {
+                    let mut universe = DmxUniverse::new();
+                    let fm_lock = fm.lock().unwrap();
+                    
+                    if let Err(e) = fm_lock.apply_to_dmx(&mut universe) {
+                        warn!("Failed to apply to DMX during update: {}", e);
+                    } else {
+                        drop(fm_lock);
+                        
+                        if let Ok(mut dmx) = dmx.lock() {
+                            // Copy universe data to DMX controller
+                            for (i, val) in universe.as_slice().iter().enumerate() {
+                                if let Err(e) = dmx.set_channel(i + 1, *val) {
+                                    warn!("Failed to set DMX channel {} during update: {}", i + 1, e);
+                                    break;
+                                }
+                            }
+                            
+                            let _ = dmx.send_dmx();
+                        }
+                    }
                 }
             }
+            
+            self.dmx_last_update = Instant::now();
         }
     }
     
@@ -618,8 +644,13 @@ impl PlaybackApp {
             return;
         }
         
-        // Execute each command
-        for cmd in &commands {
+        // Collect command descriptions for logging (only lighting commands)
+        let mut cmd_descriptions = Vec::new();
+        
+        // Execute each command - handle fades specially
+        let mut i = 0;
+        while i < commands.len() {
+            let cmd = &commands[i];
             let mut fm = fixture_manager.lock().unwrap();
             
             // Format as raw CTL format: "XXX-YYY" 
@@ -640,15 +671,97 @@ impl PlaybackApp {
             }
             
             // Add to recent commands (keep last 100 for better history)
-            self.recent_commands.push((time_ms, cmd_desc));
+            self.recent_commands.push((time_ms, cmd_desc.clone()));
             if self.recent_commands.len() > 100 {
                 self.recent_commands.remove(0);
             }
             
+            // Only collect lighting commands for file logging (skip water/PLC commands)
+            if !is_water {
+                cmd_descriptions.push(cmd_desc.clone());
+            }
+            
+            // Check if this is a fade command
+            let is_fade_command = Self::is_fade_command(cmd.fcw_address);
+            
+            if is_fade_command && i + 1 < commands.len() {
+                // This is a fade command - next command contains the target color
+                let fade_duration_ms = cmd.data as u64 * 100; // data is in tenths of seconds
+                let target_cmd = &commands[i + 1];
+                
+                // Get the base address
+                // 100-199 fades regular FCW addresses (100 -> 0, 117 -> 17, etc.)
+                // 600-699 fades individual fixtures in 500-series (604 -> 504, 617 -> 517, etc.)
+                let base_address = cmd.fcw_address - 100;
+                
+                // Format target command for logging
+                let target_cmd_desc = if target_cmd.is_hex_color {
+                    format!("{:03}-{}", target_cmd.fcw_address, target_cmd.hex_color.as_ref().unwrap_or(&"???".to_string()))
+                } else {
+                    format!("{:03}-{:03}", target_cmd.fcw_address, target_cmd.data)
+                };
+                
+                // Add target command to recent commands
+                self.recent_commands.push((time_ms, target_cmd_desc.clone()));
+                if self.recent_commands.len() > 100 {
+                    self.recent_commands.remove(0);
+                }
+                
+                // Only add to file log if not a water command
+                if !is_water {
+                    cmd_descriptions.push(target_cmd_desc);
+                }
+                
+                // Execute the fade based on target command type
+                let result = if target_cmd.is_hex_color {
+                    if let Some(hex) = &target_cmd.hex_color {
+                        // Parse hex color for fade
+                        let hex_clean = hex.trim_start_matches('#');
+                        if hex_clean.len() == 6 {
+                            if let (Ok(r), Ok(g), Ok(b)) = (
+                                u8::from_str_radix(&hex_clean[0..2], 16),
+                                u8::from_str_radix(&hex_clean[2..4], 16),
+                                u8::from_str_radix(&hex_clean[4..6], 16),
+                            ) {
+                                fm.start_fade(base_address, r, g, b, fade_duration_ms)
+                            } else {
+                                Err(anyhow::anyhow!("Invalid hex color"))
+                            }
+                        } else {
+                            Err(anyhow::anyhow!("Invalid hex color length"))
+                        }
+                    } else {
+                        Err(anyhow::anyhow!("Missing hex color"))
+                    }
+                } else {
+                    // Regular color index fade
+                    // Get color from color map
+                    if let Some(color) = fm.config.get_color(target_cmd.data) {
+                        if let Ok((r, g, b)) = color.to_rgb() {
+                            fm.start_fade(base_address, r, g, b, fade_duration_ms)
+                        } else {
+                            Err(anyhow::anyhow!("Color conversion failed"))
+                        }
+                    } else {
+                        Err(anyhow::anyhow!("Color not found"))
+                    }
+                };
+                
+                if let Err(e) = result {
+                    warn!("Fade command execution error: {}", e);
+                }
+                
+                // Skip the next command since we consumed it as the fade target
+                i += 2;
+                continue;
+            }
+            
+            // Regular (non-fade) command execution
             let result = if cmd.is_hex_color {
                 if let Some(hex) = &cmd.hex_color {
                     fm.execute_hex_command(cmd.fcw_address, hex)
                 } else {
+                    i += 1;
                     continue;
                 }
             } else {
@@ -658,6 +771,32 @@ impl PlaybackApp {
             if let Err(e) = result {
                 warn!("Command execution error: {}", e);
             }
+            
+            i += 1;
+        }
+        
+        // Update active fades
+        if let Some(fm) = &self.fixture_manager {
+            fm.lock().unwrap().update_fades();
+        }
+        
+        // Log all commands for this timestamp as one line in MM:SS.T format
+        if !cmd_descriptions.is_empty() {
+            let total_seconds = (time_ms as f64) / 1000.0;
+            let minutes = (total_seconds / 60.0).floor() as u64;
+            let seconds = (total_seconds % 60.0).floor() as u64;
+            let tenths = ((total_seconds % 1.0) * 10.0).floor() as u64;
+            
+            let time_str = format!("{:02}:{:02}.{}", minutes, seconds, tenths);
+            let commands_str = cmd_descriptions.join(", ");
+            let log_entry = format!("{} > {}\n", time_str, commands_str);
+            
+            let log_path = std::path::Path::new("Lights_CTL_Output.txt");
+            let _ = std::fs::OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open(log_path)
+                .and_then(|mut f| std::io::Write::write_all(&mut f, log_entry.as_bytes()));
         }
         
         // Send to DMX if controller is available
@@ -690,10 +829,19 @@ impl PlaybackApp {
         // PLC sending is handled by background thread - commands are already queued
     }
     
-    /// Check if FCW address is a water command (based on FCWMap Water.csv)
+    /// Check if FCW address is a water command (based on light_groups.json water directives)
     fn is_water_command(fcw_address: u16) -> bool {
         match fcw_address {
             1..=13 | 33..=40 | 47..=48 | 87..=91 | 99 | 217..=223 | 249..=255 | 700..=749 => true,
+            _ => false,
+        }
+    }
+    
+    fn is_fade_command(fcw_address: u16) -> bool {
+        // Fade commands are base address + 100 (e.g., 17->117, 18->118)
+        // Or hex color fades are 600 series (e.g., 507->607)
+        match fcw_address {
+            100..=199 | 600..=699 => true,
             _ => false,
         }
     }
@@ -711,7 +859,7 @@ impl PlaybackApp {
         self.operator_panel.playback.is_playing = self.is_playing && !self.is_paused;
         self.operator_panel.playback.current_position = self.playback_position;
         
-        let (selected_playlist_type, clicked_song_index) = self.operator_panel.show(
+        let (selected_playlist_type, clicked_song_index, step_clicked) = self.operator_panel.show(
             ctx, 
             ui, 
             &mut self.is_playing, 
@@ -724,7 +872,34 @@ impl PlaybackApp {
             &mut self.playback_panel_state,
             &self.current_song_path,
             &self.recent_commands,
+            self.fixture_manager.as_ref(),
         );
+        
+        // Handle step button click (temporary feature for CTL debugging)
+        if step_clicked && self.is_paused {
+            let current_time_ms = self.playback_position.as_millis() as u64;
+            
+            // Find the next timestamp after current position (copy needed data to avoid borrow issues)
+            let next_step = self.current_ctl_file.as_ref().and_then(|ctl_file| {
+                ctl_file.lines.iter()
+                    .find(|line| line.time_ms > current_time_ms)
+                    .map(|line| (line.time_ms, line.commands.len()))
+            });
+            
+            if let Some((next_time_ms, command_count)) = next_step {
+                // Execute commands at that timestamp
+                self.execute_commands_at_time(next_time_ms);
+                
+                // Update playback position to the next timestamp
+                self.playback_position = Duration::from_millis(next_time_ms);
+                self.last_command_time = next_time_ms;
+                
+                info!("Step: Advanced to {}ms, executed {} commands", 
+                    next_time_ms, command_count);
+            } else {
+                info!("Step: No more commands in CTL file");
+            }
+        }
         
         // If user clicked a song in the playlist, jump to that song
         if let Some(song_index) = clicked_song_index {
@@ -769,7 +944,7 @@ impl PlaybackApp {
                     }
                 }
                 "Playlist" => {
-                    self.operator_panel.load_todays_playlist();
+                    self.operator_panel.load_todays_playlist(&self.settings.playlist_folder);
                     // Load first song from today's playlist
                     if let Some(song_path) = self.operator_panel.get_next_song_from_current_playlist() {
                         self.load_song(song_path);
@@ -1575,6 +1750,12 @@ impl eframe::App for PlaybackApp {
                         self.playback_panel_state.announcements_folder = path;
                     }
                     _ => {}
+                }
+                // Auto-save settings when folder path changes
+                if let Err(e) = self.settings.save() {
+                    self.set_status(&format!("Failed to save settings: {}", e), StatusType::Warning);
+                } else {
+                    self.set_status("Folder path updated and saved", StatusType::Success);
                 }
                 self.folder_dialog_rx = None;
             }

@@ -1,12 +1,24 @@
 use crate::config::{CsvConfig, FcwDirective, FixtureFormat};
 use crate::dmx::DmxUniverse;
 use std::collections::HashMap;
+use std::time::Instant;
 use anyhow::Result;
+
+/// Fade state for a fixture
+#[derive(Debug, Clone)]
+struct FadeState {
+    start_time: Instant,
+    duration_ms: u64,
+    start_color: (u8, u8, u8, u8),
+    end_color: (u8, u8, u8, u8),
+}
 
 /// Manages fixtures and applies commands using CSV configurations
 pub struct FixtureManager {
-    config: CsvConfig,
+    pub config: CsvConfig,
     current_state: HashMap<u16, (u8, u8, u8, u8)>, // Fixture# -> (R, G, B, W)
+    active_fades: HashMap<u16, FadeState>, // Fixture# -> FadeState
+    locked_addresses: std::collections::HashSet<u16>, // FCW addresses that are locked until cleared with 000000
     use_rgbw: bool, // true = convert RGB to RGBW, false = RGB only with W=0
 }
 
@@ -15,8 +27,20 @@ impl FixtureManager {
         Self {
             config,
             current_state: HashMap::new(),
+            active_fades: HashMap::new(),
+            locked_addresses: std::collections::HashSet::new(),
             use_rgbw: true, // Default to RGBW mode
         }
+    }
+    
+    /// Check if an FCW address is lockable (holds state until cleared with 000000)
+    fn is_lockable_address(address: u16) -> bool {
+        matches!(address, 57 | 504 | 505 | 509 | 510 | 514 | 515 | 520 | 524 | 525 | 529 | 530 | 534 | 535)
+    }
+    
+    /// Check if a color is black (off)
+    fn is_black(r: u8, g: u8, b: u8) -> bool {
+        r == 0 && g == 0 && b == 0
     }
     
     /// Set whether to use RGBW mode (convert RGB to RGBW) or RGB mode (W=0)
@@ -47,6 +71,9 @@ impl FixtureManager {
     /// Execute an FCW command: "ADDRESS-DATA"
     /// Example: "051-008" means FCW address 051, color index 008
     pub fn execute_fcw_command(&mut self, address: u16, data: u16) -> Result<()> {
+        // Check if this is a lockable address
+        let is_lockable = Self::is_lockable_address(address);
+        
         // Get the FCW mapping to find affected fixtures
         let mapping = self.config.get_fcw_mapping(address);
         
@@ -55,7 +82,7 @@ impl FixtureManager {
             return Ok(());
         }
         
-        // Get the color from ColorMap
+        // Get the color from legacy_colors.json
         let color = self.config.get_color(data);
         
         if color.is_none() {
@@ -64,6 +91,21 @@ impl FixtureManager {
         }
         
         let (r, g, b) = color.unwrap().to_rgb()?;
+        let is_black = Self::is_black(r, g, b);
+        
+        // Handle locking logic for lockable addresses
+        if is_lockable {
+            if is_black {
+                // Black (000) unlocks the address and turns it off
+                self.locked_addresses.remove(&address);
+            } else if self.locked_addresses.contains(&address) {
+                // Address is locked - ignore this command
+                return Ok(());
+            } else {
+                // Not locked yet - lock it after setting the color
+                self.locked_addresses.insert(address);
+            }
+        }
         
         // Collect fixture operations to avoid borrow checker issues
         let operations: Vec<(u16, FcwDirective)> = mapping.unwrap()
@@ -104,6 +146,9 @@ impl FixtureManager {
     /// Execute a hex color command: "ADDRESS-RRGGBB"
     /// Example: "051-FF0000" means FCW address 051, red color
     pub fn execute_hex_command(&mut self, address: u16, hex_color: &str) -> Result<()> {
+        // Check if this is a lockable address
+        let is_lockable = Self::is_lockable_address(address);
+        
         // Parse hex color
         let hex = hex_color.trim_start_matches('#');
         if hex.len() != 6 {
@@ -113,6 +158,21 @@ impl FixtureManager {
         let r = u8::from_str_radix(&hex[0..2], 16)?;
         let g = u8::from_str_radix(&hex[2..4], 16)?;
         let b = u8::from_str_radix(&hex[4..6], 16)?;
+        let is_black = Self::is_black(r, g, b);
+        
+        // Handle locking logic for lockable addresses
+        if is_lockable {
+            if is_black {
+                // Black (000000) unlocks the address and turns it off
+                self.locked_addresses.remove(&address);
+            } else if self.locked_addresses.contains(&address) {
+                // Address is locked - ignore this command
+                return Ok(());
+            } else {
+                // Not locked yet - lock it after setting the color
+                self.locked_addresses.insert(address);
+            }
+        }
         
         // Get the FCW mapping
         let mapping = self.config.get_fcw_mapping(address);
@@ -182,7 +242,60 @@ impl FixtureManager {
     
     /// Apply current fixture states to DMX universe
     pub fn apply_to_dmx(&self, universe: &mut DmxUniverse) -> Result<()> {
+        // First update any active fades
+        let now = Instant::now();
+        for (fixture_num, fade_state) in &self.active_fades {
+            let elapsed_ms = now.duration_since(fade_state.start_time).as_millis() as u64;
+            
+            // Check if fade is complete
+            if elapsed_ms >= fade_state.duration_ms {
+                continue; // Will be cleaned up in update_fades
+            }
+            
+            // Interpolate color
+            let progress = elapsed_ms as f32 / fade_state.duration_ms as f32;
+            let r = Self::interpolate_u8(fade_state.start_color.0, fade_state.end_color.0, progress);
+            let g = Self::interpolate_u8(fade_state.start_color.1, fade_state.end_color.1, progress);
+            let b = Self::interpolate_u8(fade_state.start_color.2, fade_state.end_color.2, progress);
+            let w = Self::interpolate_u8(fade_state.start_color.3, fade_state.end_color.3, progress);
+            
+            // Apply interpolated color to DMX
+            if let Some(fixture) = self.config.get_fixture(*fixture_num) {
+                let channel = fixture.dmx_channel as usize;
+                
+                match fixture.format {
+                    FixtureFormat::RGB => {
+                        if channel > 0 && channel + 2 <= 512 {
+                            let _ = universe.set_channel(channel, r);
+                            let _ = universe.set_channel(channel + 1, g);
+                            let _ = universe.set_channel(channel + 2, b);
+                        }
+                    }
+                    FixtureFormat::RGBW => {
+                        if channel > 0 && channel + 3 <= 512 {
+                            let _ = universe.set_channel(channel, r);
+                            let _ = universe.set_channel(channel + 1, g);
+                            let _ = universe.set_channel(channel + 2, b);
+                            let _ = universe.set_channel(channel + 3, w);
+                        }
+                    }
+                    FixtureFormat::X => {
+                        let brightness = r.max(g).max(b);
+                        if channel > 0 && channel <= 512 {
+                            let _ = universe.set_channel(channel, brightness);
+                        }
+                    }
+                }
+            }
+        }
+        
+        // Apply non-fading fixtures
         for (fixture_num, (r, g, b, w)) in &self.current_state {
+            // Skip if actively fading
+            if self.active_fades.contains_key(fixture_num) {
+                continue;
+            }
+            
             if let Some(fixture) = self.config.get_fixture(*fixture_num) {
                 let channel = fixture.dmx_channel as usize;
                 
@@ -216,8 +329,112 @@ impl FixtureManager {
         Ok(())
     }
     
-    /// Get current color of a fixture
+    /// Update fades and clean up completed ones
+    pub fn update_fades(&mut self) {
+        let now = Instant::now();
+        let mut completed_fades = Vec::new();
+        
+        for (fixture_num, fade_state) in &self.active_fades {
+            let elapsed_ms = now.duration_since(fade_state.start_time).as_millis() as u64;
+            
+            if elapsed_ms >= fade_state.duration_ms {
+                // Fade complete - set final color
+                self.current_state.insert(*fixture_num, fade_state.end_color);
+                completed_fades.push(*fixture_num);
+            }
+        }
+        
+        // Remove completed fades
+        for fixture_num in completed_fades {
+            self.active_fades.remove(&fixture_num);
+        }
+    }
+    
+    /// Linear interpolation between two u8 values
+    fn interpolate_u8(start: u8, end: u8, progress: f32) -> u8 {
+        let start_f = start as f32;
+        let end_f = end as f32;
+        (start_f + (end_f - start_f) * progress).round() as u8
+    }
+    
+    /// Start a fade for fixtures to a target color
+    pub fn start_fade(&mut self, address: u16, target_r: u8, target_g: u8, target_b: u8, duration_ms: u64) -> Result<()> {
+        // Get the FCW mapping to find affected fixtures
+        let mapping = self.config.get_fcw_mapping(address);
+        
+        if mapping.is_none() {
+            tracing::warn!("No FCW mapping found for address {}", address);
+            return Ok(());
+        }
+        
+        let (target_r_out, target_g_out, target_b_out, target_w_out) = self.rgb_to_rgbw(target_r, target_g, target_b);
+        
+        // Start fade for all affected fixtures
+        let operations: Vec<(u16, FcwDirective)> = mapping.unwrap()
+            .fixture_directives
+            .iter()
+            .map(|(num, dir)| (*num, dir.clone()))
+            .collect();
+        
+        let now = Instant::now();
+        
+        for (fixture_num, directive) in operations {
+            match directive {
+                FcwDirective::On | FcwDirective::Fade => {
+                    // Get current color (or black if not set)
+                    let start_color = self.current_state.get(&fixture_num).copied().unwrap_or((0, 0, 0, 0));
+                    
+                    // Apply color corrections to target
+                    let fixture = self.config.get_fixture(fixture_num);
+                    if let Some(fixture) = fixture {
+                        let end_r = (target_r_out as f32 * fixture.corrections.get(0).unwrap_or(&1.0)) as u8;
+                        let end_g = (target_g_out as f32 * fixture.corrections.get(1).unwrap_or(&1.0)) as u8;
+                        let end_b = (target_b_out as f32 * fixture.corrections.get(2).unwrap_or(&1.0)) as u8;
+                        let end_w = (target_w_out as f32 * fixture.corrections.get(3).unwrap_or(&1.0)) as u8;
+                        
+                        // Start the fade
+                        self.active_fades.insert(fixture_num, FadeState {
+                            start_time: now,
+                            duration_ms,
+                            start_color,
+                            end_color: (end_r, end_g, end_b, end_w),
+                        });
+                        
+                        tracing::debug!(
+                            "Starting fade for fixture {}: {:?} -> {:?} over {}ms",
+                            fixture_num,
+                            start_color,
+                            (end_r, end_g, end_b, end_w),
+                            duration_ms
+                        );
+                    }
+                }
+                _ => {}
+            }
+        }
+        
+        Ok(())
+    }
+    
+    /// Get current color of a fixture (including fade interpolation if active)
     pub fn get_fixture_color(&self, fixture_num: u16) -> Option<(u8, u8, u8, u8)> {
+        // If actively fading, return interpolated color
+        if let Some(fade_state) = self.active_fades.get(&fixture_num) {
+            let now = Instant::now();
+            let elapsed_ms = now.duration_since(fade_state.start_time).as_millis() as u64;
+            
+            if elapsed_ms < fade_state.duration_ms {
+                // Still fading - interpolate
+                let progress = elapsed_ms as f32 / fade_state.duration_ms as f32;
+                let r = Self::interpolate_u8(fade_state.start_color.0, fade_state.end_color.0, progress);
+                let g = Self::interpolate_u8(fade_state.start_color.1, fade_state.end_color.1, progress);
+                let b = Self::interpolate_u8(fade_state.start_color.2, fade_state.end_color.2, progress);
+                let w = Self::interpolate_u8(fade_state.start_color.3, fade_state.end_color.3, progress);
+                return Some((r, g, b, w));
+            }
+        }
+        
+        // Not fading or fade complete - return static color
         self.current_state.get(&fixture_num).copied()
     }
     
