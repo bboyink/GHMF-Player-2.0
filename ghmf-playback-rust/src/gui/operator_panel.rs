@@ -172,6 +172,7 @@ pub struct OperatorPanel {
     pub dmx_fixtures: Vec<DmxFixtureState>,
     pub available_fixtures: Vec<FixtureInfo>,
     pub lights_layout: LightsLayout,
+    pub dmx_expanded: bool, // Toggle state for DMX fixture layout visibility
     
     // Start Show With selector
     pub available_playlists: Vec<String>,
@@ -228,6 +229,7 @@ impl Default for OperatorPanel {
             dmx_fixtures: Vec::new(),
             available_fixtures: Vec::new(),
             lights_layout: LightsLayout::load(),
+            dmx_expanded: false, // Start collapsed
             available_playlists: vec![
                 "Pre-Show".to_string(),
                 "Playlist".to_string(),
@@ -1341,16 +1343,32 @@ impl OperatorPanel {
             .inner_margin(12.0)
             .show(ui, |ui| {
                 ui.vertical(|ui| {
-                    ui.label(RichText::new("DMX Fixture Layout").size(14.0).color(theme::AppColors::TEXT_SECONDARY));
+                    // Header with title and CTL toggle button
+                    ui.horizontal(|ui| {
+                        ui.label(RichText::new("DMX Fixture Layout").size(14.0).color(theme::AppColors::TEXT_SECONDARY));
+                        
+                        // Push CTL button to the right
+                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                            let ctl_button = egui::Button::new(RichText::new("CTL").size(10.0).color(Color32::WHITE))
+                                .fill(Color32::from_rgb(60, 60, 60)) // Dark gray
+                                .stroke(Stroke::new(1.0, Color32::from_rgb(80, 80, 80)))
+                                .rounding(4.0);
+                            
+                            if ui.add(ctl_button).clicked() {
+                                self.dmx_expanded = !self.dmx_expanded;
+                            }
+                        });
+                    });
                     ui.add_space(8.0);
                     
-                    // Render the 27x6 grid
+                    // Render the 27x6 grid (always visible)
                     self.render_fixture_grid(ui, fixture_manager);
                     
-                    ui.add_space(12.0);
-                    
-                    // Show CTL command log
-                    self.render_ctl_command_log(ui, recent_commands);
+                    // Only show CTL command log if expanded
+                    if self.dmx_expanded {
+                        ui.add_space(12.0);
+                        self.render_ctl_command_log(ui, recent_commands);
+                    }
                 });
             });
     }

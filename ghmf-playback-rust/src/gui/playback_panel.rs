@@ -344,14 +344,12 @@ pub fn show(
             });
         });
         
-        ui.add_space(20.0);
+        ui.add_space(10.0);
         
         // ============= 6. PLC OUTPUT =============
-        if show_plc_output(ui, recent_commands, *is_paused) {
-            step_clicked = true;
-        }
+        show_plc_output(ui, recent_commands);
         
-        ui.add_space(20.0);
+        ui.add_space(10.0);
     });
     
     // ============= ANNOUNCEMENT POPUP MODAL =============
@@ -359,7 +357,7 @@ pub fn show(
         show_announcement_popup(ui.ctx(), state, audio_player, is_playing, is_paused, playback_position, current_song_path);
     }
     
-    step_clicked
+    false // No step button anymore
 }
 
 fn format_duration(duration: Duration) -> String {
@@ -387,9 +385,7 @@ fn is_water_command(fcw_address: u16) -> bool {
 }
 
 /// Show PLC output display
-/// Returns true if the step button was clicked
-fn show_plc_output(ui: &mut Ui, recent_commands: &[(u64, String)], is_paused: bool) -> bool {
-    let mut step_clicked = false;
+fn show_plc_output(ui: &mut Ui, recent_commands: &[(u64, String)]) {
     
     // Filter and group water commands by timestamp
     let water_commands: Vec<(u64, Vec<&str>)> = {
@@ -425,25 +421,8 @@ fn show_plc_output(ui: &mut Ui, recent_commands: &[(u64, String)], is_paused: bo
                 .inner_margin(12.0)
                 .show(ui, |ui| {
                     ui.vertical(|ui| {
-                        // Header with title and step button
-                        ui.horizontal(|ui| {
-                            ui.label(RichText::new("PLC Output").size(14.0).color(theme::AppColors::TEXT_SECONDARY));
-                            
-                            // Push step button to the right
-                            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                                // Only show step button when paused
-                                if is_paused {
-                                    let step_button = egui::Button::new(RichText::new("⏩ Step").size(11.0).color(egui::Color32::BLACK))
-                                        .fill(theme::AppColors::PRIMARY)
-                                        .stroke(egui::Stroke::new(1.0, theme::AppColors::PRIMARY_LIGHT))
-                                        .rounding(4.0);
-                                    
-                                    if ui.add(step_button).clicked() {
-                                        step_clicked = true;
-                                    }
-                                }
-                            });
-                        });
+                        // Header
+                        ui.label(RichText::new("PLC Output").size(14.0).color(theme::AppColors::TEXT_SECONDARY));
                         ui.add_space(8.0);
                         
                         // Scrollable area for commands with min height to ensure full width on load
@@ -453,6 +432,9 @@ fn show_plc_output(ui: &mut Ui, recent_commands: &[(u64, String)], is_paused: bo
                             .max_height(100.0)
                             .auto_shrink([false, false])
                             .show(ui, |ui| {
+                                // Remove vertical spacing between lines
+                                ui.spacing_mut().item_spacing.y = 0.0;
+                                
                                 if water_commands.is_empty() {
                                     ui.label(RichText::new("No water commands yet").size(12.0).color(theme::AppColors::TEXT_SECONDARY));
                                 } else {
@@ -462,6 +444,7 @@ fn show_plc_output(ui: &mut Ui, recent_commands: &[(u64, String)], is_paused: bo
                                         
                                         ui.horizontal(|ui| {
                                             ui.spacing_mut().item_spacing.x = 0.0;
+                                            ui.spacing_mut().item_spacing.y = 0.0;
                                             
                                             // Time and separator
                                             ui.label(RichText::new(format!("{} > ", time_str))
@@ -497,8 +480,6 @@ fn show_plc_output(ui: &mut Ui, recent_commands: &[(u64, String)], is_paused: bo
         
         // Lighting commands are now shown in DMX fixture feedback area
     });
-    
-    step_clicked
 }
 
 fn load_announcement_files(announcements_folder: &str) -> Vec<PathBuf> {
