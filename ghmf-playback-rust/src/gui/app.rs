@@ -1,4 +1,4 @@
-use super::{playback_panel, lighting_panel, status_panel, settings_dialog, command_panel, theme, sidebar, dmx_map_panel, light_group_panel, legacy_color_panel, playlist_panel, start_time_panel, procedures_panel, operator_panel};
+use super::{playback_panel, lighting_panel, status_panel, settings_dialog, command_panel, theme, sidebar, dmx_map_panel, light_group_panel, legacy_color_panel, playlist_panel, start_time_panel, procedures_panel, operator_panel, lights_layout_panel};
 use crate::audio::AudioPlayer;
 use crate::dmx::{EnttecDmxPro, DmxUniverse};
 use crate::plc::{PlcClient, PlcStatus};
@@ -72,6 +72,9 @@ pub struct PlaybackApp {
     // Legacy Color Mapper
     legacy_color_panel: legacy_color_panel::LegacyColorPanel,
     
+    // Lights Layout Panel
+    lights_layout_panel: lights_layout_panel::LightsLayoutPanel,
+    
     // Start Time Panel
     start_time_panel: start_time_panel::StartTimePanel,
     
@@ -131,6 +134,7 @@ impl Default for PlaybackApp {
             dmx_map_panel: dmx_map_panel::DmxMapPanel::new(),
             light_group_panel: light_group_panel::LightGroupPanel::new(),
             legacy_color_panel: legacy_color_panel::LegacyColorPanel::default(),
+            lights_layout_panel: lights_layout_panel::LightsLayoutPanel::new(),
             start_time_panel: start_time_panel::StartTimePanel::new(),
             procedures_panel: procedures_panel::ProceduresPanel::new(),
             playlist_panel: playlist_panel::PlaylistPanel::new(),
@@ -686,11 +690,12 @@ impl PlaybackApp {
         // PLC sending is handled by background thread - commands are already queued
     }
     
-    /// Check if FCW address is a water command
+    /// Check if FCW address is a water command (based on FCWMap Water.csv)
     fn is_water_command(fcw_address: u16) -> bool {
-        (fcw_address >= 1 && fcw_address <= 13) ||
-        (fcw_address >= 217 && fcw_address <= 255) ||
-        (fcw_address >= 700 && fcw_address <= 896)
+        match fcw_address {
+            1..=13 | 33..=40 | 47..=48 | 87..=91 | 99 | 217..=223 | 249..=255 | 700..=749 => true,
+            _ => false,
+        }
     }
     
     // View rendering methods
@@ -1167,11 +1172,28 @@ impl PlaybackApp {
                     .rounding(8.0);
                     
                     if ui.add(test_button).clicked() {
+                        // 099-000 is a reset command that turns off both water and lights
                         if let Some(plc) = &self.plc_client {
                             plc.queue_command_sync("099-000".to_string());
-                            self.set_status("Test command 099-000 sent to PLC", StatusType::Info);
+                            
+                            // Add to recent commands so it shows up in PLC output
+                            let time_ms = self.playback_position.as_millis() as u64;
+                            self.recent_commands.push((time_ms, "099-000".to_string()));
+                            if self.recent_commands.len() > 100 {
+                                self.recent_commands.remove(0);
+                            }
+                            
+                            self.set_status("Reset command 099-000 sent to PLC", StatusType::Info);
                         } else {
                             self.set_status("PLC not initialized", StatusType::Warning);
+                        }
+                        
+                        // Turn off all lights (send #000000 to all fixtures)
+                        if let Some(dmx) = &self.dmx_controller {
+                            if let Ok(mut dmx) = dmx.lock() {
+                                dmx.clear();
+                                let _ = dmx.send_dmx();
+                            }
                         }
                     }
                 });
@@ -1632,6 +1654,9 @@ impl eframe::App for PlaybackApp {
                 }
                 sidebar::AppView::SettingsLightGroups => {
                     self.light_group_panel.show(ctx, ui);
+                }
+                sidebar::AppView::SettingsLightsLayout => {
+                    self.lights_layout_panel.show(ctx, ui);
                 }
                 sidebar::AppView::SettingsLegacyColor => {
                     self.legacy_color_panel.show(ctx, ui);

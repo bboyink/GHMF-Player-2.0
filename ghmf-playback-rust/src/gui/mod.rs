@@ -13,6 +13,7 @@ mod playlist_panel;
 mod start_time_panel;
 mod procedures_panel;
 mod operator_panel;
+mod lights_layout_panel;
 
 pub use app::PlaybackApp;
 pub use sidebar::{AppView, Sidebar};

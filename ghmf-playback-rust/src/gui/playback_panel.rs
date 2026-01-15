@@ -231,7 +231,7 @@ pub fn show(
             // Announcement Button with icon
             let announcement_button = Button::new(RichText::new("Announcements").size(18.0));
             
-            let announcement_response = ui.add_sized([250.0, 60.0], announcement_button);
+            let announcement_response = ui.add_sized([250.0, 70.0], announcement_button);
             
             // Draw megaphone icon on top of button (overlay)
             if let Some(ref icon) = state.megaphone_icon {
@@ -324,7 +324,7 @@ pub fn show(
                 
                 // Buttons 10px higher with 20px spacing
                 let button_y = top_y - 10.0;
-                for preset in [35, 45, 55, 65, 75] {
+                for preset in [25, 35, 45, 55, 65, 75] {
                     let btn_rect = egui::Rect::from_min_size(
                         egui::Pos2::new(cursor_x, button_y),
                         egui::Vec2::new(45.0, row_height)
@@ -373,11 +373,12 @@ fn format_time_with_tenths(time_ms: u64) -> String {
     format!("{:02}:{:02}.{}", minutes, seconds, tenths)
 }
 
-/// Check if FCW address is a water command
+/// Check if FCW address is a water command (based on FCWMap Water.csv)
 fn is_water_command(fcw_address: u16) -> bool {
-    (fcw_address >= 1 && fcw_address <= 13) ||
-    (fcw_address >= 217 && fcw_address <= 255) ||
-    (fcw_address >= 700 && fcw_address <= 896)
+    match fcw_address {
+        1..=13 | 33..=40 | 47..=48 | 87..=91 | 99 | 217..=223 | 249..=255 | 700..=749 => true,
+        _ => false,
+    }
 }
 
 /// Show PLC output display
@@ -404,17 +405,9 @@ fn show_plc_output(ui: &mut Ui, recent_commands: &[(u64, String)]) {
         result
     };
     
-    // Get waveform width (95% of available width, same as waveform)
-    let waveform_width = ui.available_width() * 0.95;
-    
-    // Center the card horizontally
-    ui.horizontal(|ui| {
-        ui.add_space((ui.available_width() - waveform_width) / 2.0);
-        
-        ui.vertical(|ui| {
-            ui.set_width(waveform_width);
-            
-            // PLC Output Card
+    // Use full width for PLC output
+    ui.vertical(|ui| {
+        // PLC Output Card
             egui::Frame::none()
                 .fill(theme::AppColors::SURFACE)
                 .stroke(egui::Stroke::new(1.0, theme::AppColors::SURFACE_LIGHT))
@@ -425,30 +418,53 @@ fn show_plc_output(ui: &mut Ui, recent_commands: &[(u64, String)]) {
                         ui.label(RichText::new("PLC Output").size(14.0).color(theme::AppColors::TEXT_SECONDARY));
                         ui.add_space(8.0);
                         
-                        if water_commands.is_empty() {
-                            ui.label(RichText::new("No water commands yet").size(12.0).color(theme::AppColors::TEXT_SECONDARY));
-                        } else {
-                            // Scrollable area for commands
-                            egui::ScrollArea::vertical()
-                                .max_height(150.0)
-                                .auto_shrink([false, false])
-                                .show(ui, |ui| {
+                        // Scrollable area for commands with min height to ensure full width on load
+                        egui::ScrollArea::vertical()
+                            .min_scrolled_height(150.0)
+                            .max_height(150.0)
+                            .auto_shrink([false, false])
+                            .show(ui, |ui| {
+                                if water_commands.is_empty() {
+                                    ui.label(RichText::new("No water commands yet").size(12.0).color(theme::AppColors::TEXT_SECONDARY));
+                                } else {
                                     for (time_ms, commands) in water_commands.iter().rev().take(20) {
-                                        // Format: MM:SS.T XXX-XXX XXX-XXX ...
+                                        // Format: MM:SS.T > XXX-XXX XXX-XXX ...
                                         let time_str = format_time_with_tenths(*time_ms);
-                                        let commands_str = commands.join(" ");
-                                        let line = format!("{} {}", time_str, commands_str);
                                         
-                                        ui.label(RichText::new(line)
-                                            .size(12.0)
-                                            .color(theme::AppColors::TEXT_PRIMARY)
-                                            .family(egui::FontFamily::Monospace));
+                                        ui.horizontal(|ui| {
+                                            ui.spacing_mut().item_spacing.x = 0.0;
+                                            
+                                            // Time and separator
+                                            ui.label(RichText::new(format!("{} > ", time_str))
+                                                .size(12.0)
+                                                .color(theme::AppColors::TEXT_PRIMARY)
+                                                .family(egui::FontFamily::Monospace));
+                                            
+                                            // Commands with 099-000 in yellow
+                                            for (i, cmd) in commands.iter().enumerate() {
+                                                if i > 0 {
+                                                    ui.label(RichText::new(" ")
+                                                        .size(12.0)
+                                                        .family(egui::FontFamily::Monospace));
+                                                }
+                                                
+                                                let color = if *cmd == "099-000" {
+                                                    egui::Color32::from_rgb(255, 215, 0) // Yellow/Gold
+                                                } else {
+                                                    theme::AppColors::TEXT_PRIMARY
+                                                };
+                                                
+                                                ui.label(RichText::new(*cmd)
+                                                    .size(12.0)
+                                                    .color(color)
+                                                    .family(egui::FontFamily::Monospace));
+                                            }
+                                        });
                                     }
-                                });
-                        }
+                                }
+                            });
                     });
                 });
-        });
     });
 }
 

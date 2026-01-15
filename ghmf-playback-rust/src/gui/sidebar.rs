@@ -10,6 +10,7 @@ pub enum AppView {
     Settings,
     SettingsDmxMap,
     SettingsLightGroups,
+    SettingsLightsLayout,
     SettingsLegacyColor,
     SettingsStartTime,
     SettingsProcedures,
@@ -25,6 +26,7 @@ impl AppView {
             AppView::Settings => "⚙",    // Settings gear icon
             AppView::SettingsDmxMap => "◉",      // DMX grid icon
             AppView::SettingsLightGroups => "💡", // Light bulb icon
+            AppView::SettingsLightsLayout => "▦", // Grid layout icon
             AppView::SettingsLegacyColor => "🎨", // Palette icon
             AppView::SettingsStartTime => "🕐",   // Clock icon
             AppView::SettingsProcedures => "📋",   // Checklist icon
@@ -40,6 +42,7 @@ impl AppView {
             AppView::Settings => "Settings",
             AppView::SettingsDmxMap => "DMX Map",
             AppView::SettingsLightGroups => "Light Groups",
+            AppView::SettingsLightsLayout => "Lights Layout",
             AppView::SettingsLegacyColor => "Legacy Color",
             AppView::SettingsStartTime => "Start Time",
             AppView::SettingsProcedures => "Procedures",
@@ -55,6 +58,7 @@ impl AppView {
             AppView::Settings => "Settings Menu",
             AppView::SettingsDmxMap => "DMX Mapper - Assign Fixtures to DMX Channels",
             AppView::SettingsLightGroups => "Light Group Mapping - Create FWC Light Groups",
+            AppView::SettingsLightsLayout => "Lights Layout - Visual Layout for Operator Screen",
             AppView::SettingsLegacyColor => "Legacy Color Mapping - Map FWC Values to RGB Colors",
             AppView::SettingsStartTime => "Start Time Configuration - Set Show Date and Time",
             AppView::SettingsProcedures => "Procedures - Configure Pre-Show Reminders",
@@ -69,6 +73,7 @@ pub struct Sidebar {
     pub settings_expanded: bool,
     logo_texture: Option<Arc<TextureHandle>>,
     light_groups_icon: Option<Arc<TextureHandle>>,
+    lights_layout_icon: Option<Arc<TextureHandle>>,
     app_settings_icon: Option<Arc<TextureHandle>>,
     dmx_map_icon: Option<Arc<TextureHandle>>,
     sort_down_icon: Option<Arc<TextureHandle>>,
@@ -85,6 +90,7 @@ impl Default for Sidebar {
             settings_expanded: false,
             logo_texture: None,
             light_groups_icon: None,
+            lights_layout_icon: None,
             app_settings_icon: None,
             dmx_map_icon: None,
             sort_down_icon: None,
@@ -237,6 +243,25 @@ impl Sidebar {
             }
         }
 
+        // Load Grid icon for Lights Layout
+        if self.lights_layout_icon.is_none() {
+            let icon_bytes = include_bytes!("../../assets/grid.png");
+            if let Ok(image) = image::load_from_memory(icon_bytes) {
+                let size = [image.width() as _, image.height() as _];
+                let image_buffer = image.to_rgba8();
+                let pixels = image_buffer.as_flat_samples();
+                let color_image = ColorImage::from_rgba_unmultiplied(size, pixels.as_slice());
+                
+                let texture = ctx.load_texture(
+                    "lights_layout_icon",
+                    color_image,
+                    Default::default()
+                );
+                
+                self.lights_layout_icon = Some(Arc::new(texture));
+            }
+        }
+
         // Load Checklist icon
         if self.checklist_icon.is_none() {
             let icon_bytes = include_bytes!("../../assets/check_list.png");
@@ -331,6 +356,7 @@ impl Sidebar {
                 let subviews = [
                     AppView::SettingsDmxMap,
                     AppView::SettingsLightGroups,
+                    AppView::SettingsLightsLayout,
                     AppView::SettingsLegacyColor,
                     AppView::SettingsStartTime,
                     AppView::SettingsProcedures,
@@ -592,6 +618,28 @@ impl Sidebar {
             }
             AppView::SettingsLightGroups => {
                 if let Some(icon) = &self.light_groups_icon {
+                    let icon_rect = Rect::from_center_size(
+                        icon_pos,
+                        Vec2::new(icon_size, icon_size)
+                    );
+                    ui.painter().image(
+                        icon.id(),
+                        icon_rect,
+                        Rect::from_min_max(Pos2::ZERO, Pos2::new(1.0, 1.0)),
+                        Color32::WHITE
+                    );
+                } else {
+                    ui.painter().text(
+                        icon_pos,
+                        egui::Align2::LEFT_CENTER,
+                        view.icon(),
+                        FontId::new(icon_size, FontFamily::Proportional),
+                        text_color
+                    );
+                }
+            }
+            AppView::SettingsLightsLayout => {
+                if let Some(icon) = &self.lights_layout_icon {
                     let icon_rect = Rect::from_center_size(
                         icon_pos,
                         Vec2::new(icon_size, icon_size)

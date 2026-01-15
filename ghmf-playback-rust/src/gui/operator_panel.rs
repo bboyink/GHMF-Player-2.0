@@ -935,11 +935,7 @@ impl OperatorPanel {
             
             ui.add_space(30.0);
             
-            // 4. PLC Output Section
-            self.show_plc_output(ui);
-            ui.add_space(20.0);
-            
-            // 5. DMX Output Section
+            // 4. DMX Output Section
             self.show_dmx_output(ui);
             ui.add_space(20.0);
         });
@@ -1265,18 +1261,6 @@ impl OperatorPanel {
             });
         
         playlist_to_load
-    }
-    
-    
-    fn show_plc_output(&mut self, ui: &mut Ui) {
-        egui::Frame::none()
-            .fill(theme::AppColors::SURFACE)
-            .stroke(Stroke::new(1.0, theme::AppColors::SURFACE_LIGHT))
-            .rounding(8.0)
-            .inner_margin(16.0)
-            .show(ui, |ui| {
-                ui.label("PLC Output - TBD");
-            });
     }
     
     fn show_dmx_output(&mut self, ui: &mut Ui) {
