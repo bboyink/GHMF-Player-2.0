@@ -1477,6 +1477,15 @@ impl OperatorPanel {
     }
     
     /// Render CTL command log showing recent lighting commands in MM:SS.T > format
+    fn is_water_command_static(fcw_address: u16) -> bool {
+        matches!(fcw_address,
+            1..=15 |    // Water commands
+            34 |        // Water control
+            87..=90 |   // Water/effects
+            250..=253   // Water effects
+        )
+    }
+    
     fn render_ctl_command_log(&self, ui: &mut Ui, recent_commands: &[(u64, String)]) {
         // Create a fixed-height scrollable area for 2 lines
         const LINE_HEIGHT: f32 = 16.0;
@@ -1496,28 +1505,36 @@ impl OperatorPanel {
                         if recent_commands.is_empty() {
                             ui.label(RichText::new("No lighting commands").size(11.0).color(theme::AppColors::TEXT_SECONDARY));
                         } else {
-                            // Group commands by timestamp
+                            // Filter only lighting commands (non-water commands)
                             use std::collections::HashMap;
                             let mut grouped: HashMap<u64, Vec<String>> = HashMap::new();
                             for (timestamp_ms, command) in recent_commands.iter() {
-                                grouped.entry(*timestamp_ms).or_insert_with(Vec::new).push(command.clone());
+                                // Parse FCW address to filter out water commands
+                                if let Some(dash_pos) = command.find('-') {
+                                    if let Ok(fcw_address) = command[..dash_pos].parse::<u16>() {
+                                        // Only show lighting commands (filter out water commands)
+                                        if !Self::is_water_command_static(fcw_address) {
+                                            grouped.entry(*timestamp_ms).or_insert_with(Vec::new).push(command.clone());
+                                        }
+                                    }
+                                }
                             }
                             
                             // Get unique timestamps sorted in reverse order (most recent first)
                             let mut timestamps: Vec<u64> = grouped.keys().copied().collect();
                             timestamps.sort_unstable_by(|a, b| b.cmp(a));
                             
-                            // Display each timestamp with all its commands on one line
-                            for timestamp_ms in timestamps {
-                                if let Some(commands) = grouped.get(&timestamp_ms) {
+                            // Display each timestamp with all its commands on one line (space-separated)
+                            for timestamp_ms in timestamps.iter().take(20) {
+                                if let Some(commands) = grouped.get(timestamp_ms) {
                                     // Convert milliseconds to MM:SS.T format
-                                    let total_seconds = (timestamp_ms as f64) / 1000.0;
+                                    let total_seconds = (*timestamp_ms as f64) / 1000.0;
                                     let minutes = (total_seconds / 60.0).floor() as u64;
                                     let seconds = (total_seconds % 60.0).floor() as u64;
                                     let tenths = ((total_seconds % 1.0) * 10.0).floor() as u64;
                                     
                                     let time_str = format!("{:02}:{:02}.{}", minutes, seconds, tenths);
-                                    let commands_str = commands.join(", ");
+                                    let commands_str = commands.join(" ");
                                     let line = format!("{} > {}", time_str, commands_str);
                                     
                                     ui.label(RichText::new(line).size(11.0).color(theme::AppColors::TEXT_PRIMARY).monospace());

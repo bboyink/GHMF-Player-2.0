@@ -894,6 +894,13 @@ impl PlaybackApp {
                 self.playback_position = Duration::from_millis(next_time_ms);
                 self.last_command_time = next_time_ms;
                 
+                // Sync audio player position for accurate time display
+                if let Some(player) = &self.audio_player {
+                    if let Ok(player) = player.lock() {
+                        let _ = player.seek(self.playback_position);
+                    }
+                }
+                
                 info!("Step: Advanced to {}ms, executed {} commands", 
                     next_time_ms, command_count);
             } else {
@@ -904,6 +911,12 @@ impl PlaybackApp {
         // If user clicked a song in the playlist, jump to that song
         if let Some(song_index) = clicked_song_index {
             if let Some(song_path) = self.operator_panel.jump_to_song(song_index) {
+                // Send 099-000 to PLC when manually selecting a song
+                if let Some(ref plc) = self.plc_client {
+                    plc.queue_command_sync("099-000\r\n".to_string());
+                    info!("Sent 099-000 to PLC for manual song selection");
+                }
+                
                 self.load_song(song_path.clone());
                 self.current_playlist = "Production".to_string(); // Or track the actual playlist type
                 

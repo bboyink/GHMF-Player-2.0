@@ -19,6 +19,8 @@ pub struct FixtureManager {
     current_state: HashMap<u16, (u8, u8, u8, u8)>, // Fixture# -> (R, G, B, W)
     active_fades: HashMap<u16, FadeState>, // Fixture# -> FadeState
     locked_addresses: std::collections::HashSet<u16>, // FCW addresses that are locked until cleared with 000000
+    module_colors: HashMap<u16, (u8, u8, u8)>, // Module address (17-23) -> Last (R, G, B)
+    sticky_pair_states: HashMap<u16, bool>, // Track if sticky addresses are colored (not black)
     use_rgbw: bool, // true = convert RGB to RGBW, false = RGB only with W=0
 }
 
@@ -29,18 +31,82 @@ impl FixtureManager {
             current_state: HashMap::new(),
             active_fades: HashMap::new(),
             locked_addresses: std::collections::HashSet::new(),
+            module_colors: HashMap::new(),
+            sticky_pair_states: HashMap::new(),
             use_rgbw: true, // Default to RGBW mode
         }
     }
     
     /// Check if an FCW address is lockable (holds state until cleared with 000000)
     fn is_lockable_address(address: u16) -> bool {
-        matches!(address, 57 | 504 | 505 | 509 | 510 | 514 | 515 | 520 | 524 | 525 | 529 | 530 | 534 | 535)
+        matches!(address, 57 | 504 | 505 | 509 | 510 | 514 | 515 | 519 | 520 | 524 | 525 | 529 | 530 | 534 | 535)
     }
     
     /// Check if a color is black (off)
     fn is_black(r: u8, g: u8, b: u8) -> bool {
         r == 0 && g == 0 && b == 0
+    }
+    
+    /// Get the module address (17-23) for a given fixture number
+    fn get_module_address_for_fixture(fixture_num: u16) -> Option<u16> {
+        match fixture_num {
+            1..=6 => Some(17),   // Module 1
+            7..=12 => Some(18),  // Module 2
+            13..=18 => Some(19), // Module 3
+            19..=23 => Some(20), // Module 4
+            24..=29 => Some(21), // Module 5
+            30..=35 => Some(22), // Module 6
+            36..=41 => Some(23), // Module 7
+            _ => None,
+        }
+    }
+    
+    /// Get the center fixture for a sticky address pair (backwards compatibility)
+    /// Returns (center_fixture_num, pair_address_1, pair_address_2, module_address)
+    fn get_center_fixture_for_sticky_pair(address: u16) -> Option<(u16, u16, u16, u16)> {
+        match address {
+            504 | 505 => Some((5, 504, 505, 17)),   // Module 1: fixtures 4-6
+            509 | 510 => Some((11, 509, 510, 18)),  // Module 2: fixtures 10-12
+            514 | 515 => Some((17, 514, 515, 19)),  // Module 3: fixtures 16-18
+            519 | 520 => Some((23, 519, 520, 20)),  // Module 4: fixtures 22-23 (no center, using 23)
+            524 | 525 => Some((28, 524, 525, 21)),  // Module 5: fixtures 27-29
+            529 | 530 => Some((34, 529, 530, 22)),  // Module 6: fixtures 33-35
+            534 | 535 => Some((40, 534, 535, 23)),  // Module 7: fixtures 39-41
+            _ => None,
+        }
+    }
+    
+    /// Update center fixture state based on sticky pair activation
+    fn update_center_fixture(&mut self, address: u16, is_colored: bool) -> Result<()> {
+        if let Some((center_fixture, addr1, addr2, module_addr)) = Self::get_center_fixture_for_sticky_pair(address) {
+            // Update sticky pair state
+            self.sticky_pair_states.insert(address, is_colored);
+            
+            // Check if either address in the pair is colored
+            let pair1_colored = self.sticky_pair_states.get(&addr1).copied().unwrap_or(false);
+            let pair2_colored = self.sticky_pair_states.get(&addr2).copied().unwrap_or(false);
+            let any_colored = pair1_colored || pair2_colored;
+            
+            if any_colored {
+                // Turn off center fixture
+                tracing::info!("Backwards compat: Turning off center fixture {} (sticky addresses {}, {} active)", 
+                    center_fixture, addr1, addr2);
+                self.set_fixture_color(center_fixture, 0, 0, 0, 0)?;
+            } else {
+                // Both are black, restore to module color
+                if let Some(&(r, g, b)) = self.module_colors.get(&module_addr) {
+                    let (r, g, b, w) = if self.use_rgbw {
+                        self.rgb_to_rgbw(r, g, b)
+                    } else {
+                        (r, g, b, 0)
+                    };
+                    tracing::info!("Backwards compat: Restoring center fixture {} to module {} color: ({}, {}, {})", 
+                        center_fixture, module_addr, r, g, b);
+                    self.set_fixture_color(center_fixture, r, g, b, w)?;
+                }
+            }
+        }
+        Ok(())
     }
     
     /// Set whether to use RGBW mode (convert RGB to RGBW) or RGB mode (W=0)
@@ -93,16 +159,53 @@ impl FixtureManager {
         let (r, g, b) = color.unwrap().to_rgb()?;
         let is_black = Self::is_black(r, g, b);
         
+        // Store module colors for addresses 17-23 (non-black only)
+        if matches!(address, 17..=23) && !is_black {
+            self.module_colors.insert(address, (r, g, b));
+        }
+        
         // Handle locking logic for lockable addresses
         if is_lockable {
             if is_black {
-                // Black (000) unlocks the address and turns it off
+                // For sticky fixtures going to black: restore module color instead of turning off
+                tracing::info!("Sticky address {} received black - restoring module color", address);
+                let mapping = self.config.get_fcw_mapping(address);
+                
+                if let Some(mapping) = mapping {
+                    // Collect fixture operations
+                    let operations: Vec<(u16, FcwDirective)> = mapping
+                        .fixture_directives
+                        .iter()
+                        .map(|(num, dir)| (*num, dir.clone()))
+                        .collect();
+                    
+                    // For each affected fixture, restore its module color
+                    for (fixture_num, _) in operations {
+                        if let Some(module_addr) = Self::get_module_address_for_fixture(fixture_num) {
+                            if let Some(&(mod_r, mod_g, mod_b)) = self.module_colors.get(&module_addr) {
+                                // Restore the module color instead of turning off
+                                tracing::info!("Restoring fixture {} to module {} color: ({}, {}, {})", 
+                                    fixture_num, module_addr, mod_r, mod_g, mod_b);
+                                let (r_out, g_out, b_out, w_out) = self.rgb_to_rgbw(mod_r, mod_g, mod_b);
+                                self.set_fixture_color(fixture_num, r_out, g_out, b_out, w_out)?;
+                            }
+                        }
+                    }
+                    
+                    // Update center fixture (backwards compatibility)
+                    self.update_center_fixture(address, false)?;
+                }
+                
+                // Unlock the address
                 self.locked_addresses.remove(&address);
+                return Ok(());
             } else if self.locked_addresses.contains(&address) {
                 // Address is locked - ignore this command
+                tracing::info!("Sticky address {} is locked - ignoring command with data {}", address, data);
                 return Ok(());
             } else {
                 // Not locked yet - lock it after setting the color
+                tracing::info!("Locking sticky address {} with color index {}", address, data);
                 self.locked_addresses.insert(address);
             }
         }
@@ -140,6 +243,11 @@ impl FixtureManager {
             }
         }
         
+        // Update center fixture if this is a lockable address with color
+        if is_lockable && !is_black {
+            self.update_center_fixture(address, true)?;
+        }
+        
         Ok(())
     }
     
@@ -160,11 +268,44 @@ impl FixtureManager {
         let b = u8::from_str_radix(&hex[4..6], 16)?;
         let is_black = Self::is_black(r, g, b);
         
+        // Store module colors for addresses 17-23 (non-black only)
+        if matches!(address, 17..=23) && !is_black {
+            self.module_colors.insert(address, (r, g, b));
+        }
+        
         // Handle locking logic for lockable addresses
         if is_lockable {
             if is_black {
-                // Black (000000) unlocks the address and turns it off
+                // For sticky fixtures going to 000000: restore module color instead of turning off
+                // Get the FCW mapping first to find which fixtures are affected
+                let mapping = self.config.get_fcw_mapping(address);
+                
+                if let Some(mapping) = mapping {
+                    // Collect fixture operations
+                    let operations: Vec<(u16, FcwDirective)> = mapping
+                        .fixture_directives
+                        .iter()
+                        .map(|(num, dir)| (*num, dir.clone()))
+                        .collect();
+                    
+                    // For each affected fixture, restore its module color
+                    for (fixture_num, _) in operations {
+                        if let Some(module_addr) = Self::get_module_address_for_fixture(fixture_num) {
+                            if let Some(&(mod_r, mod_g, mod_b)) = self.module_colors.get(&module_addr) {
+                                // Restore the module color instead of turning off
+                                let (r_out, g_out, b_out, w_out) = self.rgb_to_rgbw(mod_r, mod_g, mod_b);
+                                self.set_fixture_color(fixture_num, r_out, g_out, b_out, w_out)?;
+                            }
+                        }
+                    }
+                    
+                    // Update center fixture (backwards compatibility)
+                    self.update_center_fixture(address, false)?;
+                }
+                
+                // Unlock the address
                 self.locked_addresses.remove(&address);
+                return Ok(());
             } else if self.locked_addresses.contains(&address) {
                 // Address is locked - ignore this command
                 return Ok(());
@@ -201,6 +342,11 @@ impl FixtureManager {
                 }
                 _ => {}
             }
+        }
+        
+        // Update center fixture if this is a lockable address with color
+        if is_lockable && !is_black {
+            self.update_center_fixture(address, true)?;
         }
         
         Ok(())

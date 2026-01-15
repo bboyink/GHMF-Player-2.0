@@ -413,27 +413,7 @@ fn show_plc_output(ui: &mut Ui, recent_commands: &[(u64, String)], is_paused: bo
         result
     };
     
-    // Filter and group lighting commands by timestamp
-    let lighting_commands: Vec<(u64, Vec<&str>)> = {
-        let mut grouped = std::collections::HashMap::new();
-        
-        for (time_ms, cmd_desc) in recent_commands.iter() {
-            // Parse FCW address from command (format: XXX-YYY)
-            if let Some(dash_pos) = cmd_desc.find('-') {
-                if let Ok(fcw_address) = cmd_desc[..dash_pos].parse::<u16>() {
-                    if !is_water_command(fcw_address) {
-                        grouped.entry(*time_ms)
-                            .or_insert_with(Vec::new)
-                            .push(cmd_desc.as_str());
-                    }
-                }
-            }
-        }
-        
-        let mut result: Vec<(u64, Vec<&str>)> = grouped.into_iter().collect();
-        result.sort_by_key(|(time, _)| *time);
-        result
-    };
+    // Lighting commands are now shown in DMX fixture feedback, not here
     
     // Use full width for output sections
     ui.vertical(|ui| {
@@ -515,61 +495,7 @@ fn show_plc_output(ui: &mut Ui, recent_commands: &[(u64, String)], is_paused: bo
                     });
                 });
         
-        ui.add_space(8.0);
-        
-        // Lighting Commands Card
-        egui::Frame::none()
-            .fill(theme::AppColors::SURFACE)
-            .stroke(egui::Stroke::new(1.0, theme::AppColors::SURFACE_LIGHT))
-            .rounding(8.0)
-            .inner_margin(12.0)
-            .show(ui, |ui| {
-                ui.vertical(|ui| {
-                    ui.label(RichText::new("Lighting Output").size(14.0).color(theme::AppColors::TEXT_SECONDARY));
-                    ui.add_space(8.0);
-                    
-                    // Scrollable area for lighting commands
-                    egui::ScrollArea::vertical()
-                        .id_salt("lighting_output_scroll")
-                        .min_scrolled_height(100.0)
-                        .max_height(100.0)
-                        .auto_shrink([false, false])
-                        .show(ui, |ui| {
-                            if lighting_commands.is_empty() {
-                                ui.label(RichText::new("No lighting commands yet").size(12.0).color(theme::AppColors::TEXT_SECONDARY));
-                            } else {
-                                for (time_ms, commands) in lighting_commands.iter().rev().take(20) {
-                                    // Format: MM:SS.T > XXX-XXX XXX-XXX ...
-                                    let time_str = format_time_with_tenths(*time_ms);
-                                    
-                                    ui.horizontal(|ui| {
-                                        ui.spacing_mut().item_spacing.x = 0.0;
-                                        
-                                        // Time and separator
-                                        ui.label(RichText::new(format!("{} > ", time_str))
-                                            .size(12.0)
-                                            .color(theme::AppColors::TEXT_PRIMARY)
-                                            .family(egui::FontFamily::Monospace));
-                                        
-                                        // Commands
-                                        for (i, cmd) in commands.iter().enumerate() {
-                                            if i > 0 {
-                                                ui.label(RichText::new(" ")
-                                                    .size(12.0)
-                                                    .family(egui::FontFamily::Monospace));
-                                            }
-                                            
-                                            ui.label(RichText::new(*cmd)
-                                                .size(12.0)
-                                                .color(theme::AppColors::TEXT_PRIMARY)
-                                                .family(egui::FontFamily::Monospace));
-                                        }
-                                    });
-                                }
-                            }
-                        });
-                });
-            });
+        // Lighting commands are now shown in DMX fixture feedback area
     });
     
     step_clicked
