@@ -1,5 +1,6 @@
 use super::theme;
 use crate::config::Settings;
+use crate::dmx::get_network_interfaces;
 use egui::{Context, RichText};
 
 pub fn show(ctx: &Context, open: &mut bool, settings: &mut Settings) {
@@ -83,6 +84,76 @@ pub fn show(ctx: &Context, open: &mut bool, settings: &mut Settings) {
                     });
                 } else {
                     ui.label(RichText::new("PLC disabled")
+                        .color(theme::AppColors::TEXT_DISABLED));
+                }
+            });
+            
+            ui.add_space(15.0);
+            
+            // sACN / E.131 settings
+            ui.group(|ui| {
+                ui.label(RichText::new("DMX Controller").size(16.0).strong());
+                ui.add_space(10.0);
+                
+                ui.checkbox(&mut settings.sacn_enabled, "Enable E.131 sACN Output");
+                
+                if settings.sacn_enabled {
+                    ui.add_space(5.0);
+                    
+                    // Network interface selection
+                    ui.horizontal(|ui| {
+                        ui.label("Network Interface:");
+                        
+                        // Get available interfaces
+                        let interfaces = get_network_interfaces();
+                        
+                        egui::ComboBox::from_id_salt("sacn_interface")
+                            .selected_text(if settings.sacn_interface_ip.is_empty() {
+                                "Select interface..."
+                            } else {
+                                &settings.sacn_interface_ip
+                            })
+                            .show_ui(ui, |ui| {
+                                for (name, ip) in interfaces {
+                                    let label = format!("{} ({})", name, ip);
+                                    if ui.selectable_value(&mut settings.sacn_interface_ip, ip.clone(), label).clicked() {
+                                        // Interface selected
+                                    }
+                                }
+                            });
+                    });
+                    
+                    ui.add_space(5.0);
+                    
+                    // Filter mode selection
+                    ui.horizontal(|ui| {
+                        ui.label("Output Mode:");
+                        
+                        egui::ComboBox::from_id_salt("sacn_filter_mode")
+                            .selected_text(if settings.sacn_filter_mode == "900only" {
+                                "900 Codes Only"
+                            } else {
+                                "All Lights"
+                            })
+                            .show_ui(ui, |ui| {
+                                ui.selectable_value(&mut settings.sacn_filter_mode, "all".to_string(), "All Lights");
+                                ui.selectable_value(&mut settings.sacn_filter_mode, "900only".to_string(), "900 Codes Only");
+                            });
+                    });
+                    
+                    ui.add_space(5.0);
+                    
+                    ui.label(RichText::new("Universe 1 • Priority 100")
+                        .size(11.0)
+                        .color(theme::AppColors::TEXT_DISABLED));
+                    
+                    if settings.sacn_interface_ip.is_empty() {
+                        ui.label(RichText::new("⚠ Select a network interface to enable sACN output")
+                            .size(11.0)
+                            .color(theme::AppColors::WARNING));
+                    }
+                } else {
+                    ui.label(RichText::new("sACN output disabled")
                         .color(theme::AppColors::TEXT_DISABLED));
                 }
             });

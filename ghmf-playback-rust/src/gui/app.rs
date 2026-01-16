@@ -1,6 +1,6 @@
 use super::{playback_panel, lighting_panel, status_panel, settings_dialog, command_panel, theme, sidebar, dmx_map_panel, light_group_panel, legacy_color_panel, playlist_panel, start_time_panel, procedures_panel, operator_panel, lights_layout_panel};
 use crate::audio::AudioPlayer;
-use crate::dmx::{EnttecDmxPro, DmxUniverse};
+use crate::dmx::{EnttecDmxPro, DmxUniverse, SacnOutput, SacnFilterMode};
 use crate::plc::{PlcClient, PlcStatus};
 use crate::config::{Settings, CsvConfig};
 use crate::lighting::FixtureManager;
@@ -18,6 +18,7 @@ pub struct PlaybackApp {
     // Core systems
     audio_player: Option<Arc<Mutex<AudioPlayer>>>,
     dmx_controller: Option<Arc<Mutex<EnttecDmxPro>>>,
+    sacn_output: Arc<Mutex<SacnOutput>>,
     plc_client: Option<Arc<PlcClient>>,
     fixture_manager: Option<Arc<Mutex<FixtureManager>>>,
     csv_config: Option<Arc<CsvConfig>>,
@@ -103,6 +104,7 @@ impl Default for PlaybackApp {
         Self {
             audio_player: None,
             dmx_controller: None,
+            sacn_output: Arc::new(Mutex::new(SacnOutput::new())),
             plc_client: None,
             settings: Settings::load(),
             sidebar: sidebar::Sidebar::default(),
@@ -509,6 +511,17 @@ impl PlaybackApp {
                             
                             let _ = dmx.send_dmx();
                         }
+                        
+                        // Send via sACN if enabled
+                        if let Ok(mut sacn) = self.sacn_output.lock() {
+                            if sacn.is_active() {
+                                // For 900 codes only mode, we need fixture IDs >= 900
+                                let fixture_900_ids: Vec<usize> = Vec::new(); // Will be populated from fixture manager
+                                if let Err(e) = sacn.send_dmx(&universe, &fixture_900_ids) {
+                                    warn!("Failed to send sACN data: {}", e);
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -550,6 +563,59 @@ impl PlaybackApp {
             if let Ok(status) = rx.try_recv() {
                 self.plc_status = status;
             }
+        }
+    }
+    
+    /// Update sACN output state based on settings
+    fn update_sacn_state(&mut self) {
+        // Clone settings values to avoid borrow checker issues
+        let sacn_enabled = self.settings.sacn_enabled;
+        let sacn_interface_ip = self.settings.sacn_interface_ip.clone();
+        let sacn_filter_mode = self.settings.sacn_filter_mode.clone();
+        
+        // Track status updates to apply after releasing lock
+        let mut status_message: Option<(String, StatusType)> = None;
+        
+        if let Ok(mut sacn) = self.sacn_output.lock() {
+            // Check if sACN should be enabled
+            if sacn_enabled && !sacn_interface_ip.is_empty() {
+                // Start sACN if not already active
+                if !sacn.is_active() {
+                    match sacn.start(&sacn_interface_ip) {
+                        Ok(_) => {
+                            info!("sACN output started on {}", sacn_interface_ip);
+                            status_message = Some(("sACN output enabled".to_string(), StatusType::Success));
+                        }
+                        Err(e) => {
+                            warn!("Failed to start sACN: {}", e);
+                            status_message = Some((format!("Failed to start sACN: {}", e), StatusType::Warning));
+                        }
+                    }
+                }
+                
+                // Update filter mode
+                let filter_mode = if sacn_filter_mode == "900only" {
+                    SacnFilterMode::Code900Only
+                } else {
+                    SacnFilterMode::AllLights
+                };
+                
+                if sacn.get_filter_mode() != filter_mode {
+                    sacn.set_filter_mode(filter_mode);
+                }
+            } else {
+                // Stop sACN if active
+                if sacn.is_active() {
+                    sacn.stop();
+                    info!("sACN output stopped");
+                    status_message = Some(("sACN output disabled".to_string(), StatusType::Info));
+                }
+            }
+        } // Lock is released here
+        
+        // Now update status if needed
+        if let Some((message, status_type)) = status_message {
+            self.set_status(&message, status_type);
         }
     }
     
@@ -1324,6 +1390,114 @@ impl PlaybackApp {
             
             ui.add_space(20.0);
             
+            // sACN / E.131 Settings Card
+            egui::Frame::none()
+                .fill(theme::AppColors::SURFACE)
+                .stroke(Stroke::new(1.0, theme::AppColors::SURFACE_LIGHT))
+                .rounding(12.0)
+                .inner_margin(24.0)
+                .show(ui, |ui| {
+                    ui.label(
+                        egui::RichText::new("E.131 sACN Output")
+                            .size(20.0)
+                            .strong()
+                            .color(theme::AppColors::CYAN)
+                    );
+                    ui.add_space(10.0);
+                    ui.add(egui::Separator::default().spacing(0.0));
+                    ui.add_space(15.0);
+                    
+                    ui.checkbox(&mut self.settings.sacn_enabled, 
+                        egui::RichText::new("Enable sACN output")
+                            .size(14.0)
+                            .color(Color32::WHITE)
+                    );
+                    ui.add_space(8.0);
+                    ui.label(
+                        egui::RichText::new("Stream DMX data over Ethernet using E.131 protocol")
+                            .size(13.0)
+                            .color(theme::AppColors::TEXT_SECONDARY)
+                    );
+                    
+                    if self.settings.sacn_enabled {
+                        ui.add_space(20.0);
+                        
+                        // Network Interface Selection
+                        ui.label(
+                            egui::RichText::new("Network Interface:")
+                                .size(14.0)
+                                .color(Color32::WHITE)
+                        );
+                        ui.add_space(5.0);
+                        
+                        let interfaces = crate::dmx::get_network_interfaces();
+                        egui::ComboBox::from_id_salt("sacn_interface")
+                            .selected_text(if self.settings.sacn_interface_ip.is_empty() {
+                                "Select interface..."
+                            } else {
+                                &self.settings.sacn_interface_ip
+                            })
+                            .width(300.0)
+                            .show_ui(ui, |ui| {
+                                for (name, ip) in interfaces {
+                                    let label = format!("{} ({})", name, ip);
+                                    ui.selectable_value(&mut self.settings.sacn_interface_ip, ip, label);
+                                }
+                            });
+                        
+                        ui.add_space(15.0);
+                        
+                        // Filter Mode Selection
+                        ui.label(
+                            egui::RichText::new("Output Mode:")
+                                .size(14.0)
+                                .color(Color32::WHITE)
+                        );
+                        ui.add_space(5.0);
+                        
+                        egui::ComboBox::from_id_salt("sacn_filter_mode")
+                            .selected_text(if self.settings.sacn_filter_mode == "900only" {
+                                "900 Codes Only"
+                            } else {
+                                "All Lights"
+                            })
+                            .width(300.0)
+                            .show_ui(ui, |ui| {
+                                ui.selectable_value(&mut self.settings.sacn_filter_mode, "all".to_string(), "All Lights");
+                                ui.selectable_value(&mut self.settings.sacn_filter_mode, "900only".to_string(), "900 Codes Only");
+                            });
+                        
+                        ui.add_space(8.0);
+                        ui.label(
+                            egui::RichText::new(if self.settings.sacn_filter_mode == "900only" {
+                                "Sends only channels 500-512 (fixture IDs ≥900)"
+                            } else {
+                                "Sends all 512 DMX channels"
+                            })
+                                .size(12.0)
+                                .color(theme::AppColors::TEXT_DISABLED)
+                        );
+                        
+                        ui.add_space(15.0);
+                        ui.label(
+                            egui::RichText::new("Universe 1 • Priority 100")
+                                .size(12.0)
+                                .color(theme::AppColors::TEXT_DISABLED)
+                        );
+                        
+                        if self.settings.sacn_interface_ip.is_empty() {
+                            ui.add_space(8.0);
+                            ui.label(
+                                egui::RichText::new("⚠ Select a network interface to enable output")
+                                    .size(13.0)
+                                    .color(theme::AppColors::WARNING)
+                            );
+                        }
+                    }
+                });
+            
+            ui.add_space(20.0);
+            
             // PLC Settings Card
             egui::Frame::none()
                 .fill(theme::AppColors::SURFACE)
@@ -1807,6 +1981,7 @@ impl eframe::App for PlaybackApp {
         self.update_playback_state();
         self.update_dmx_state();
         self.update_plc_status();
+        self.update_sacn_state();
         
         // Bottom status bar with dark background
         TopBottomPanel::bottom("status_bar")

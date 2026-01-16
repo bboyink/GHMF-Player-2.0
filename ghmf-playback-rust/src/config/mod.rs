@@ -39,6 +39,13 @@ pub struct Settings {
     pub announcements_folder: String,
     #[serde(default = "default_drone_battery_warning_songs")]
     pub drone_battery_warning_songs: u32,
+    // sACN settings
+    #[serde(default)]
+    pub sacn_enabled: bool,
+    #[serde(default)]
+    pub sacn_interface_ip: String,
+    #[serde(default)]
+    pub sacn_filter_mode: String, // "all" or "900only"
 }
 
 fn default_use_rgbw() -> bool {
@@ -102,6 +109,9 @@ impl Default for Settings {
             pre_show_folder: default_pre_show_folder(),
             announcements_folder: default_announcements_folder(),
             drone_battery_warning_songs: default_drone_battery_warning_songs(),
+            sacn_enabled: false,
+            sacn_interface_ip: String::new(),
+            sacn_filter_mode: "all".to_string(),
         }
     }
 }

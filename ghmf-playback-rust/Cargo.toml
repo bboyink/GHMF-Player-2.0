@@ -13,6 +13,7 @@ cpal = "0.15"
 
 # DMX/Serial
 serialport = "4.5"
+sacn = "0.11"
 
 # GUI
 egui = "=0.29.1"

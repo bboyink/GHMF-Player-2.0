@@ -48,6 +48,15 @@ impl DmxUniverse {
         }
         Ok(self.channels[channel - 1])
     }
+    
+    /// Get a channel value directly (0-indexed, for internal use)
+    pub fn get_channel_raw(&self, channel: usize) -> u8 {
+        if channel < DMX_UNIVERSE_SIZE {
+            self.channels[channel]
+        } else {
+            0
+        }
+    }
 
     /// Clear all channels to 0
     pub fn clear(&mut self) {
