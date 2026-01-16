@@ -327,31 +327,32 @@ impl PlaybackApp {
                         self.playback_panel_state.playing_announcement = false;
                         self.playback_panel_state.announcement_path = None;
                         
+                        // Restore saved waveform from before announcement
+                        if let Some(saved_waveform) = self.playback_panel_state.saved_waveform.take() {
+                            self.playback_panel_state.waveform_data = Some(saved_waveform.clone());
+                            
+                            // Recreate scrolling buffer from saved waveform
+                            let duration = saved_waveform.duration_secs;
+                            let builder = crate::audio::BufferBuilder::from_waveform(saved_waveform.samples.clone(), duration);
+                            let buffer = builder.build(7.0);
+                            self.playback_panel_state.scrolling_buffer = Some(buffer);
+                        }
+                        
                         // Reload the saved song and seek to saved position
                         if let Some(ref song_path) = self.playback_panel_state.saved_song_path {
                             let path_str = song_path.to_string_lossy();
-                            let song_path_clone = song_path.clone(); // Clone for later use
                             if let Ok(_) = player.play(&path_str) {
-                                // Reload waveform for the show song (not for announcements)
-                                drop(player); // Release lock before loading waveform
-                                self.playback_panel_state.load_waveform(&song_path_clone);
+                                // Seek to saved position
+                                let saved_pos = self.playback_panel_state.saved_position;
+                                if saved_pos > Duration::from_secs(0) {
+                                    let _ = player.seek(saved_pos);
+                                }
                                 
-                                // Re-acquire lock for seek/resume
-                                if let Some(player) = &self.audio_player {
-                                    if let Ok(player) = player.lock() {
-                                        // Seek to saved position
-                                        let saved_pos = self.playback_panel_state.saved_position;
-                                        if saved_pos > Duration::from_secs(0) {
-                                            let _ = player.seek(saved_pos);
-                                        }
-                                        
-                                        // Resume if we were paused for announcement
-                                        if self.playback_panel_state.paused_for_announcement {
-                                            player.resume();
-                                            self.playback_panel_state.paused_for_announcement = false;
-                                            self.is_paused = false;
-                                        }
-                                    }
+                                // Resume if we were paused for announcement
+                                if self.playback_panel_state.paused_for_announcement {
+                                    player.resume();
+                                    self.playback_panel_state.paused_for_announcement = false;
+                                    self.is_paused = false;
                                 }
                             }
                         }
@@ -374,19 +375,24 @@ impl PlaybackApp {
                 self.master_volume = player.get_volume();
                 self.playback_panel_state.left_volume = player.get_volume();
                 
-                // Check if song finished by comparing position to waveform duration
-                let song_duration = if let Some(ref wf) = self.playback_panel_state.waveform_data {
-                    Duration::from_secs_f32(wf.duration_secs)
+                // Don't check for song finished if we're playing an announcement
+                let finished = if self.playback_panel_state.playing_announcement {
+                    false
                 } else {
-                    Duration::from_secs(999999) // No waveform = treat as very long
+                    // Check if song finished by comparing position to waveform duration
+                    let song_duration = if let Some(ref wf) = self.playback_panel_state.waveform_data {
+                        Duration::from_secs_f32(wf.duration_secs)
+                    } else {
+                        Duration::from_secs(999999) // No waveform = treat as very long
+                    };
+                    
+                    // Song finished if: was playing AND NOT currently paused AND reached the end
+                    // Use a small buffer (0.5s) to detect near the end reliably
+                    let near_end = song_duration.saturating_sub(Duration::from_millis(500));
+                    was_playing && !self.is_paused && 
+                        self.playback_position >= near_end && 
+                        self.playback_position < song_duration + Duration::from_secs(2) // Prevent infinite detection
                 };
-                
-                // Song finished if: was playing AND NOT currently paused AND reached the end
-                // Use a small buffer (0.5s) to detect near the end reliably
-                let near_end = song_duration.saturating_sub(Duration::from_millis(500));
-                let finished = was_playing && !self.is_paused && 
-                    self.playback_position >= near_end && 
-                    self.playback_position < song_duration + Duration::from_secs(2); // Prevent infinite detection
                 
                 // Check if we should execute commands
                 (self.is_playing && !self.is_paused, finished)
@@ -1826,7 +1832,9 @@ impl eframe::App for PlaybackApp {
                 .fill(theme::AppColors::BACKGROUND_LIGHT)
                 .inner_margin(0.0))
             .show(ctx, |ui| {
-                if let Some(new_view) = self.sidebar.show(ctx, ui) {
+                // Pass playing state, but only disable if truly playing (not paused)
+                let is_actively_playing = self.is_playing && !self.is_paused;
+                if let Some(new_view) = self.sidebar.show(ctx, ui, is_actively_playing) {
                     // View changed
                     info!("Switched to view: {:?}", new_view);
                     

@@ -101,7 +101,7 @@ impl CsvConfig {
         let dir = dir.as_ref();
         
         let colors = Self::load_legacy_colors_json(dir.join("legacy_colors.json"))?;
-        let fixtures = Self::load_dmx_map(dir.join("DMXMap.csv"))?;
+        let fixtures = Self::load_dmx_map_json(dir.join("dmx_mapping.json"))?;
         let fcw_mappings = Self::load_light_groups_json(dir.join("light_groups.json"))?;
         
         Ok(Self {
@@ -197,6 +197,52 @@ impl CsvConfig {
         }
         
         tracing::info!("Loaded {} fixtures from DMXMap.csv", fixtures.len());
+        Ok(fixtures)
+    }
+    
+    /// Load DMX mappings from dmx_mapping.json
+    fn load_dmx_map_json<P: AsRef<Path>>(path: P) -> Result<HashMap<u16, FixtureDefinition>> {
+        #[derive(serde::Deserialize)]
+        struct DmxMapping {
+            fixture_id: u16,
+            fixture_name: String,
+            start_channel: u16,
+        }
+        
+        #[derive(serde::Deserialize)]
+        struct DmxMappingFile {
+            mappings: Vec<DmxMapping>,
+        }
+        
+        let file_content = std::fs::read_to_string(path.as_ref())
+            .context(format!("Failed to read dmx_mapping.json at {:?}", path.as_ref()))?;
+        
+        let dmx_file: DmxMappingFile = serde_json::from_str(&file_content)
+            .context("Failed to parse dmx_mapping.json")?;
+        
+        let mut fixtures = HashMap::new();
+        
+        for mapping in dmx_file.mappings {
+            // Determine format based on fixture name or ID patterns
+            let format = if mapping.fixture_name.to_lowercase().contains("firework") || mapping.fixture_id >= 900 {
+                FixtureFormat::X
+            } else {
+                // Most fixtures are RGBW now
+                FixtureFormat::RGBW
+            };
+            
+            let corrections = vec![1.0; format.channel_count()];
+            
+            fixtures.insert(mapping.fixture_id, FixtureDefinition {
+                fixture_number: mapping.fixture_id,
+                note: mapping.fixture_name,
+                dmx_channel: mapping.start_channel,
+                format,
+                corrections,
+            });
+        }
+        
+        tracing::info!("Loaded {} fixtures from dmx_mapping.json", fixtures.len());
         Ok(fixtures)
     }
     

@@ -282,7 +282,7 @@ impl Sidebar {
         }
     }
 
-    pub fn show(&mut self, ctx: &Context, ui: &mut Ui) -> Option<AppView> {
+    pub fn show(&mut self, ctx: &Context, ui: &mut Ui, is_playing: bool) -> Option<AppView> {
         // Load logo texture if not already loaded
         self.load_logo(ctx);
         self.load_icons(ctx);
@@ -341,13 +341,13 @@ impl Sidebar {
             ];
             
             for view in views {
-                if self.nav_button(ui, view) {
+                if self.nav_button(ui, view, is_playing) {
                     clicked_view = Some(view);
                 }
             }
             
             // Settings menu with submenus
-            if self.settings_menu_button(ui) {
+            if self.settings_menu_button(ui, is_playing) {
                 self.settings_expanded = !self.settings_expanded;
             }
             
@@ -364,7 +364,7 @@ impl Sidebar {
                 ];
                 
                 for view in subviews {
-                    if self.submenu_button(ui, view) {
+                    if self.submenu_button(ui, view, is_playing) {
                         clicked_view = Some(view);
                     }
                 }
@@ -376,8 +376,11 @@ impl Sidebar {
         clicked_view
     }
     
-    fn nav_button(&mut self, ui: &mut Ui, view: AppView) -> bool {
+    fn nav_button(&mut self, ui: &mut Ui, view: AppView, is_playing: bool) -> bool {
         let is_selected = self.selected_view == view;
+        
+        // Disable all buttons except Operator when playing
+        let is_disabled = is_playing && view != AppView::Operator;
         
         let button_color = if is_selected {
             Color32::from_rgba_unmultiplied(0, 198, 255, 40) // Cyan with alpha
@@ -385,13 +388,17 @@ impl Sidebar {
             Color32::TRANSPARENT
         };
         
-        let hover_color = if is_selected {
+        let hover_color = if is_disabled {
+            button_color // No hover effect when disabled
+        } else if is_selected {
             Color32::from_rgba_unmultiplied(0, 198, 255, 60)
         } else {
             AppColors::SURFACE
         };
         
-        let text_color = if is_selected {
+        let text_color = if is_disabled {
+            Color32::from_rgba_unmultiplied(100, 100, 100, 120) // Dimmed when disabled
+        } else if is_selected {
             Color32::WHITE
         } else {
             AppColors::TEXT_SECONDARY
@@ -403,7 +410,7 @@ impl Sidebar {
         );
         
         // Draw background with rounded corners
-        if response.hovered() {
+        if !is_disabled && response.hovered() {
             ui.painter().rect_filled(
                 rect.shrink(4.0),
                 8.0,
@@ -418,7 +425,7 @@ impl Sidebar {
         }
         
         // Draw selection indicator (left border) as a rounded rect
-        if is_selected {
+        if is_selected && !is_disabled {
             let indicator_rect = Rect::from_min_max(
                 Pos2::new(rect.min.x + 6.0, rect.min.y + 10.0),
                 Pos2::new(rect.min.x + 10.0, rect.max.y - 10.0)
@@ -468,22 +475,31 @@ impl Sidebar {
         }
     }
     
-    fn settings_menu_button(&mut self, ui: &mut Ui) -> bool {
+    fn settings_menu_button(&mut self, ui: &mut Ui, is_playing: bool) -> bool {
         // Don't highlight Settings button when a submenu is selected
         let is_selected = false;
+        let is_disabled = is_playing;
         
         let button_color = Color32::TRANSPARENT;
         
-        let hover_color = AppColors::SURFACE;
+        let hover_color = if is_disabled {
+            button_color
+        } else {
+            AppColors::SURFACE
+        };
         
-        let text_color = AppColors::TEXT_SECONDARY;
+        let text_color = if is_disabled {
+            Color32::from_rgba_unmultiplied(100, 100, 100, 120)
+        } else {
+            AppColors::TEXT_SECONDARY
+        };
         
         let (rect, response) = ui.allocate_exact_size(
             Vec2::new(ui.available_width(), 48.0),
             egui::Sense::click()
         );
         
-        if response.hovered() {
+        if !is_disabled && response.hovered() {
             ui.painter().rect_filled(
                 rect.shrink(4.0),
                 8.0,
@@ -546,10 +562,11 @@ impl Sidebar {
             );
         }
         
-        response.on_hover_text("Settings Menu").clicked()
+        !is_disabled && response.on_hover_text("Settings Menu").clicked()
     }
     
-    fn submenu_button(&mut self, ui: &mut Ui, view: AppView) -> bool {
+    fn submenu_button(&mut self, ui: &mut Ui, view: AppView, is_playing: bool) -> bool {
+        let is_disabled = is_playing;
         let is_selected = self.selected_view == view;
         
         let button_color = if is_selected {
@@ -564,7 +581,9 @@ impl Sidebar {
             AppColors::SURFACE
         };
         
-        let text_color = if is_selected {
+        let text_color = if is_disabled {
+            Color32::from_rgba_unmultiplied(100, 100, 100, 120)
+        } else if is_selected {
             Color32::WHITE
         } else {
             AppColors::TEXT_SECONDARY
@@ -575,7 +594,7 @@ impl Sidebar {
             egui::Sense::click()
         );
         
-        if response.hovered() {
+        if !is_disabled && response.hovered() {
             ui.painter().rect_filled(
                 rect.shrink2(Vec2::new(8.0, 2.0)),
                 6.0,
@@ -771,7 +790,7 @@ impl Sidebar {
         
         let tooltip_response = response.on_hover_text(view.tooltip());
         
-        if tooltip_response.clicked() {
+        if !is_disabled && tooltip_response.clicked() {
             self.selected_view = view;
             true
         } else {

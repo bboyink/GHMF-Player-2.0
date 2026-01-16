@@ -11,6 +11,7 @@ struct FadeState {
     duration_ms: u64,
     start_color: (u8, u8, u8, u8),
     end_color: (u8, u8, u8, u8),
+    current_color: (u8, u8, u8, u8), // Cached interpolated color
 }
 
 /// Manages fixtures and applies commands using CSV configurations
@@ -406,24 +407,10 @@ impl FixtureManager {
     
     /// Apply current fixture states to DMX universe
     pub fn apply_to_dmx(&self, universe: &mut DmxUniverse) -> Result<()> {
-        // First update any active fades
-        let now = Instant::now();
+        // First apply any active fades using their cached color
         for (fixture_num, fade_state) in &self.active_fades {
-            let elapsed_ms = now.duration_since(fade_state.start_time).as_millis() as u64;
-            
-            // Calculate color (interpolated or final)
-            let (r, g, b, w) = if elapsed_ms >= fade_state.duration_ms {
-                // Fade complete - use exact end color to avoid flicker
-                fade_state.end_color
-            } else {
-                // Interpolate color
-                let progress = elapsed_ms as f32 / fade_state.duration_ms as f32;
-                let r = Self::interpolate_u8(fade_state.start_color.0, fade_state.end_color.0, progress);
-                let g = Self::interpolate_u8(fade_state.start_color.1, fade_state.end_color.1, progress);
-                let b = Self::interpolate_u8(fade_state.start_color.2, fade_state.end_color.2, progress);
-                let w = Self::interpolate_u8(fade_state.start_color.3, fade_state.end_color.3, progress);
-                (r, g, b, w)
-            };
+            // Use the pre-calculated color from update_fades
+            let (r, g, b, w) = fade_state.current_color;
             
             // Apply interpolated color to DMX
             if let Some(fixture) = self.config.get_fixture(*fixture_num) {
@@ -500,13 +487,27 @@ impl FixtureManager {
         let now = Instant::now();
         let mut completed_fades = Vec::new();
         
-        for (fixture_num, fade_state) in &self.active_fades {
+        for (fixture_num, fade_state) in &mut self.active_fades {
             let elapsed_ms = now.duration_since(fade_state.start_time).as_millis() as u64;
             
+            // Update the cached current color
             if elapsed_ms >= fade_state.duration_ms {
-                // Fade complete - set final color
-                self.current_state.insert(*fixture_num, fade_state.end_color);
-                completed_fades.push(*fixture_num);
+                // Fade complete - use exact end color
+                fade_state.current_color = fade_state.end_color;
+                
+                // Mark for removal after a buffer period to ensure the final color is written
+                if elapsed_ms >= fade_state.duration_ms + 100 {
+                    self.current_state.insert(*fixture_num, fade_state.end_color);
+                    completed_fades.push(*fixture_num);
+                }
+            } else {
+                // Interpolate color and cache it
+                let progress = elapsed_ms as f32 / fade_state.duration_ms as f32;
+                let r = Self::interpolate_u8(fade_state.start_color.0, fade_state.end_color.0, progress);
+                let g = Self::interpolate_u8(fade_state.start_color.1, fade_state.end_color.1, progress);
+                let b = Self::interpolate_u8(fade_state.start_color.2, fade_state.end_color.2, progress);
+                let w = Self::interpolate_u8(fade_state.start_color.3, fade_state.end_color.3, progress);
+                fade_state.current_color = (r, g, b, w);
             }
         }
         
@@ -564,6 +565,7 @@ impl FixtureManager {
                             duration_ms,
                             start_color,
                             end_color: (end_r, end_g, end_b, end_w),
+                            current_color: start_color, // Initialize with start color
                         });
                         
                         tracing::debug!(
@@ -584,20 +586,9 @@ impl FixtureManager {
     
     /// Get current color of a fixture (including fade interpolation if active)
     pub fn get_fixture_color(&self, fixture_num: u16) -> Option<(u8, u8, u8, u8)> {
-        // If actively fading, return interpolated color
+        // If actively fading, return cached color
         if let Some(fade_state) = self.active_fades.get(&fixture_num) {
-            let now = Instant::now();
-            let elapsed_ms = now.duration_since(fade_state.start_time).as_millis() as u64;
-            
-            if elapsed_ms < fade_state.duration_ms {
-                // Still fading - interpolate
-                let progress = elapsed_ms as f32 / fade_state.duration_ms as f32;
-                let r = Self::interpolate_u8(fade_state.start_color.0, fade_state.end_color.0, progress);
-                let g = Self::interpolate_u8(fade_state.start_color.1, fade_state.end_color.1, progress);
-                let b = Self::interpolate_u8(fade_state.start_color.2, fade_state.end_color.2, progress);
-                let w = Self::interpolate_u8(fade_state.start_color.3, fade_state.end_color.3, progress);
-                return Some((r, g, b, w));
-            }
+            return Some(fade_state.current_color);
         }
         
         // Not fading or fade complete - return static color

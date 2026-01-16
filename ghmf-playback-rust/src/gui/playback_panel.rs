@@ -18,6 +18,7 @@ pub struct PlaybackPanelState {
     pub announcement_path: Option<PathBuf>, // Path to current announcement
     pub saved_position: Duration, // Position in song before announcement
     pub saved_song_path: Option<PathBuf>, // Song path before announcement
+    pub saved_waveform: Option<WaveformData>, // Saved waveform data from song before announcement
     pub waveform_data: Option<WaveformData>, // Real waveform data from audio file
     pub scrolling_buffer: Option<ScrollingWaveformBuffer>, // Optimized scrolling buffer
     pub megaphone_icon: Option<Arc<TextureHandle>>, // Megaphone icon for announcements
@@ -39,6 +40,7 @@ impl Default for PlaybackPanelState {
             announcement_path: None,
             saved_position: Duration::from_secs(0),
             saved_song_path: None,
+            saved_waveform: None, // Will store original waveform during announcement
             scrolling_buffer: None, // Will be created when waveform is loaded
             waveform_data: None, // Will be loaded when a song is loaded
             megaphone_icon: None, // Will be loaded on first use
@@ -229,21 +231,46 @@ pub fn show(
             // Load megaphone icon if not already loaded
             state.load_megaphone_icon(ui.ctx());
             
-            // Announcement Button with icon
-            let announcement_button = Button::new(RichText::new("Announcements").size(18.0));
+            // Announcement Button with centered icon and text
+            let announcement_button = Button::new(
+                RichText::new("").size(18.0) // Empty text, we'll draw custom content
+            );
             
             let announcement_response = ui.add_sized([250.0, 70.0], announcement_button);
             
-            // Draw megaphone icon on top of button (overlay)
+            // Draw centered icon and text on top of button
             if let Some(ref icon) = state.megaphone_icon {
-                let icon_size = egui::Vec2::new(20.0, 20.0);
                 let button_rect = announcement_response.rect;
+                let icon_size = egui::Vec2::new(24.0, 24.0);
+                let text_spacing = 8.0;
+                
+                // Calculate total height of icon + text
+                let text_height = 18.0;
+                let total_height = icon_size.y + text_spacing + text_height;
+                
+                // Center vertically
+                let start_y = button_rect.center().y - total_height / 2.0;
+                
+                // Draw icon centered horizontally
                 let icon_pos = Pos2::new(
-                    button_rect.left() + 20.0,
-                    button_rect.center().y - icon_size.y / 2.0
+                    button_rect.center().x - icon_size.x / 2.0,
+                    start_y
                 );
                 let icon_rect = Rect::from_min_size(icon_pos, icon_size);
                 ui.put(icon_rect, egui::Image::new(icon.as_ref()).fit_to_exact_size(icon_size));
+                
+                // Draw text centered horizontally below icon
+                let text_pos = Pos2::new(
+                    button_rect.center().x,
+                    start_y + icon_size.y + text_spacing + text_height / 2.0
+                );
+                ui.painter().text(
+                    text_pos,
+                    egui::Align2::CENTER_CENTER,
+                    "Announcements",
+                    egui::FontId::proportional(18.0),
+                    Color32::WHITE
+                );
             }
             
             if announcement_response.clicked() {
@@ -353,6 +380,32 @@ pub fn show(
     });
     
     // ============= ANNOUNCEMENT POPUP MODAL =============
+    // Load announcement waveform if announcement playing but no waveform loaded yet
+    if state.playing_announcement {
+        let path_to_load = state.announcement_path.clone();
+        if let Some(path) = path_to_load {
+            // Check if we need to load the announcement waveform
+            // (saved_waveform exists means we haven't loaded announcement waveform yet)
+            let has_saved = state.saved_waveform.is_some();
+            let should_load = if has_saved {
+                match (&state.waveform_data, &state.saved_waveform) {
+                    (Some(current), Some(saved)) => {
+                        // If current waveform matches saved, we need to load announcement
+                        current.samples == saved.samples
+                    },
+                    (None, Some(_)) => true, // No waveform loaded at all
+                    _ => false,
+                }
+            } else {
+                false
+            };
+            
+            if should_load {
+                state.load_waveform(&path);
+            }
+        }
+    }
+    
     if state.show_announcement_popup {
         show_announcement_popup(ui.ctx(), state, audio_player, is_playing, is_paused, playback_position, current_song_path);
     }
@@ -580,6 +633,9 @@ fn show_announcement_popup(
                                         state.paused_for_announcement = true;
                                         *is_paused = true;
                                     }
+                                    
+                                    // Save current waveform before playing announcement
+                                    state.saved_waveform = state.waveform_data.clone();
                                     
                                     // Play announcement (no CTL file needed)
                                     if let Some(player) = audio_player {

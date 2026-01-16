@@ -83,20 +83,49 @@ impl StartTimePanel {
         }
     }
     
-    /// Get show start time for today's date, or default to "7:00 PM"
+    /// Get show start time for today's date using timeline-based logic
+    /// Finds the most recent entry on or before today and returns its time
+    /// Times "carry forward" until the next entry date is reached
     pub fn get_today_start_time(&self) -> String {
         let today = Local::now().naive_local().date();
-        let today_str = today.format("%m-%d-%Y").to_string();
         
-        // Look for today's entry in config
-        for entry in &self.config.entries {
-            if entry.date == today_str {
-                return entry.time.clone();
+        // Convert entries to dates and sort by date
+        let mut dated_entries: Vec<(NaiveDate, String)> = self.config.entries
+            .iter()
+            .filter_map(|entry| {
+                // Parse MM-DD-YYYY format
+                let parts: Vec<&str> = entry.date.split('-').collect();
+                if parts.len() == 3 {
+                    if let (Ok(month), Ok(day), Ok(year)) = (
+                        parts[0].parse::<u32>(),
+                        parts[1].parse::<u32>(),
+                        parts[2].parse::<i32>()
+                    ) {
+                        if let Some(date) = NaiveDate::from_ymd_opt(year, month, day) {
+                            return Some((date, entry.time.clone()));
+                        }
+                    }
+                }
+                None
+            })
+            .collect();
+        
+        // Sort by date (oldest first)
+        dated_entries.sort_by_key(|(date, _)| *date);
+        
+        // Find the most recent entry on or before today
+        let mut active_time = None;
+        for (date, time) in &dated_entries {
+            if *date <= today {
+                active_time = Some(time.clone());
+            } else {
+                // We've gone past today, stop looking
+                break;
             }
         }
         
-        // Default to 7:00 PM if not found
-        "7:00 PM".to_string()
+        // Return the active time or default
+        active_time.unwrap_or_else(|| "7:00 PM".to_string())
     }
     
     pub fn show(&mut self, _ctx: &Context, ui: &mut Ui) {
@@ -196,13 +225,47 @@ impl StartTimePanel {
                                     .color(theme::AppColors::TEXT_SECONDARY)
                             );
                         } else {
+                            // Sort entries by date before displaying
+                            let mut sorted_entries: Vec<(usize, &StartTimeEntry)> = self.config.entries
+                                .iter()
+                                .enumerate()
+                                .collect();
+                            
+                            sorted_entries.sort_by(|(_, a), (_, b)| {
+                                // Parse dates and compare
+                                let parse_date = |date_str: &str| -> Option<chrono::NaiveDate> {
+                                    let parts: Vec<&str> = date_str.split('-').collect();
+                                    if parts.len() == 3 {
+                                        if let (Ok(month), Ok(day), Ok(year)) = (
+                                            parts[0].parse::<u32>(),
+                                            parts[1].parse::<u32>(),
+                                            parts[2].parse::<i32>()
+                                        ) {
+                                            return chrono::NaiveDate::from_ymd_opt(year, month, day);
+                                        }
+                                    }
+                                    None
+                                };
+                                
+                                let date_a = parse_date(&a.date);
+                                let date_b = parse_date(&b.date);
+                                
+                                match (date_a, date_b) {
+                                    (Some(da), Some(db)) => da.cmp(&db),
+                                    (Some(_), None) => std::cmp::Ordering::Less,
+                                    (None, Some(_)) => std::cmp::Ordering::Greater,
+                                    (None, None) => std::cmp::Ordering::Equal,
+                                }
+                            });
+                            
+                            let mut to_remove: Option<usize> = None;
+                            
                             egui::ScrollArea::vertical()
                                 .id_source("start_times_scroll")
                                 .max_height(500.0)
                                 .show(ui, |ui| {
-                                    let mut to_remove: Option<usize> = None;
                                     
-                                    for (idx, entry) in self.config.entries.iter().enumerate() {
+                                    for &(idx, ref entry) in &sorted_entries {
                                         ui.horizontal(|ui| {
                                             ui.label(
                                                 RichText::new(format!("📅 {}     🕐 {}", entry.date, entry.time))
@@ -226,12 +289,13 @@ impl StartTimePanel {
                                         });
                                         ui.add_space(6.0);
                                     }
-                                    
-                                    if let Some(idx) = to_remove {
-                                        self.config.entries.remove(idx);
-                                        self.save_config();
-                                    }
                                 });
+                            
+                            // Handle deletion outside the scroll area to avoid borrow conflicts
+                            if let Some(idx) = to_remove {
+                                self.config.entries.remove(idx);
+                                self.save_config();
+                            }
                         }
                     });
             });
