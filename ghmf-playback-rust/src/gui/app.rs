@@ -558,7 +558,27 @@ impl PlaybackApp {
         }
     }
     
+    /// Reset all fixtures and send 099-000 to PLC
+    fn reset_lighting_system(&mut self) {
+        tracing::info!("Resetting lighting system: sending 099-000 and resetting all fixtures");
+        
+        // Send 099-000 to PLC
+        if let Some(plc) = &self.plc_client {
+            plc.queue_command_sync("099-000".to_string());
+        }
+        
+        // Reset all fixtures to black
+        if let Some(fixture_manager) = &self.fixture_manager {
+            if let Ok(mut fm) = fixture_manager.lock() {
+                fm.reset_all();
+            }
+        }
+    }
+    
     fn load_song(&mut self, song_path: PathBuf) {
+        // Reset lighting system when loading a new song
+        self.reset_lighting_system();
+        
         // Check for corresponding .ctl file
         let ctl_path = song_path.with_extension("ctl");
         
@@ -939,6 +959,9 @@ impl PlaybackApp {
         
         // If user selected a new playlist type, load the playlist and first song
         if let Some(playlist_type) = selected_playlist_type {
+            // Reset lighting system when starting a new playlist
+            self.reset_lighting_system();
+            
             // Load the appropriate playlist based on type
             // Note: load_pre_show_playlist and load_todays_playlist do file I/O
             // but are necessary to populate the playlist display
@@ -1809,6 +1832,9 @@ impl eframe::App for PlaybackApp {
                     
                     // If switching to Operator view, re-initialize as if app just loaded
                     if new_view == sidebar::AppView::Operator {
+                        // Reset lighting system when returning to operator screen
+                        self.reset_lighting_system();
+                        
                         // Reset operator panel to fresh state
                         self.operator_panel = crate::gui::operator_panel::OperatorPanel::new();
                         

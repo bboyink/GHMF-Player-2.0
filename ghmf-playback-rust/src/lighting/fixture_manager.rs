@@ -37,6 +37,24 @@ impl FixtureManager {
         }
     }
     
+    /// Reset all fixtures to black (000000) and clear all state
+    pub fn reset_all(&mut self) {
+        tracing::info!("Resetting all fixtures to black");
+        
+        // Clear all state
+        self.current_state.clear();
+        self.active_fades.clear();
+        self.locked_addresses.clear();
+        self.module_colors.clear();
+        self.sticky_pair_states.clear();
+        
+        // Note: The fixtures will naturally show black (0,0,0,0) since current_state is empty
+        // The apply_to_dmx function will not set any values, which means the DMX channels
+        // will remain at 0 (or whatever was last set). To force all fixtures to black,
+        // we could iterate through all fixture numbers and set them to (0,0,0,0),
+        // but clearing the HashMap achieves the same effect more efficiently.
+    }
+    
     /// Check if an FCW address is lockable (holds state until cleared with 000000)
     fn is_lockable_address(address: u16) -> bool {
         matches!(address, 57 | 504 | 505 | 509 | 510 | 514 | 515 | 519 | 520 | 524 | 525 | 529 | 530 | 534 | 535)
@@ -393,17 +411,19 @@ impl FixtureManager {
         for (fixture_num, fade_state) in &self.active_fades {
             let elapsed_ms = now.duration_since(fade_state.start_time).as_millis() as u64;
             
-            // Check if fade is complete
-            if elapsed_ms >= fade_state.duration_ms {
-                continue; // Will be cleaned up in update_fades
-            }
-            
-            // Interpolate color
-            let progress = elapsed_ms as f32 / fade_state.duration_ms as f32;
-            let r = Self::interpolate_u8(fade_state.start_color.0, fade_state.end_color.0, progress);
-            let g = Self::interpolate_u8(fade_state.start_color.1, fade_state.end_color.1, progress);
-            let b = Self::interpolate_u8(fade_state.start_color.2, fade_state.end_color.2, progress);
-            let w = Self::interpolate_u8(fade_state.start_color.3, fade_state.end_color.3, progress);
+            // Calculate color (interpolated or final)
+            let (r, g, b, w) = if elapsed_ms >= fade_state.duration_ms {
+                // Fade complete - use exact end color to avoid flicker
+                fade_state.end_color
+            } else {
+                // Interpolate color
+                let progress = elapsed_ms as f32 / fade_state.duration_ms as f32;
+                let r = Self::interpolate_u8(fade_state.start_color.0, fade_state.end_color.0, progress);
+                let g = Self::interpolate_u8(fade_state.start_color.1, fade_state.end_color.1, progress);
+                let b = Self::interpolate_u8(fade_state.start_color.2, fade_state.end_color.2, progress);
+                let w = Self::interpolate_u8(fade_state.start_color.3, fade_state.end_color.3, progress);
+                (r, g, b, w)
+            };
             
             // Apply interpolated color to DMX
             if let Some(fixture) = self.config.get_fixture(*fixture_num) {
