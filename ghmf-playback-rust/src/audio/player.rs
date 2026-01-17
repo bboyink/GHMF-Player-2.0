@@ -1,4 +1,4 @@
-use super::AudioError;
+use super::{AudioError, ChannelMixer};
 use rodio::{Decoder, OutputStream, OutputStreamHandle, Sink, Source};
 use std::fs::File;
 use std::io::BufReader;
@@ -11,6 +11,8 @@ pub struct AudioPlayer {
     stream_handle: OutputStreamHandle,
     sink: Arc<Mutex<Option<Sink>>>,
     current_volume: Arc<Mutex<f32>>,
+    left_volume: Arc<Mutex<f32>>,
+    right_volume: Arc<Mutex<f32>>,
     start_time: Arc<Mutex<Option<std::time::Instant>>>,
     pause_time: Arc<Mutex<Option<std::time::Instant>>>,
     accumulated_time: Arc<Mutex<Duration>>,
@@ -29,6 +31,8 @@ impl AudioPlayer {
             stream_handle,
             sink: Arc::new(Mutex::new(None)),
             current_volume: Arc::new(Mutex::new(0.35)),  // Default 35%
+            left_volume: Arc::new(Mutex::new(0.35)),
+            right_volume: Arc::new(Mutex::new(0.45)),    // Fixed at 45%
             start_time: Arc::new(Mutex::new(None)),
             pause_time: Arc::new(Mutex::new(None)),
             accumulated_time: Arc::new(Mutex::new(Duration::from_secs(0))),
@@ -51,16 +55,19 @@ impl AudioPlayer {
         let source = Decoder::new(file)
             .map_err(|e| AudioError::DecodeError(e.to_string()))?;
 
+        // Wrap source with channel mixer for independent L/R volume control
+        let mixed_source = ChannelMixer::new(
+            source,
+            self.left_volume.clone(),
+            self.right_volume.clone()
+        );
+
         // Create a new sink
         let sink = Sink::try_new(&self.stream_handle)
             .map_err(|e| AudioError::DeviceError(e.to_string()))?;
 
-        // Apply current volume
-        let volume = *self.current_volume.lock().unwrap();
-        sink.set_volume(volume);
-
         // Add source but START PAUSED - don't auto-play
-        sink.append(source);
+        sink.append(mixed_source);
         sink.pause();  // Start paused by default
 
         // Store the sink and reset time tracking
@@ -149,16 +156,19 @@ impl AudioPlayer {
         // Skip to the desired position - this may skip past the end if position is too large
         let source = source.skip_duration(position);
         
+        // Wrap source with channel mixer for independent L/R volume control
+        let mixed_source = ChannelMixer::new(
+            source,
+            self.left_volume.clone(),
+            self.right_volume.clone()
+        );
+        
         // Create a new sink
         let sink = Sink::try_new(&self.stream_handle)
             .map_err(|e| AudioError::DeviceError(e.to_string()))?;
         
-        // Apply current volume
-        let volume = *self.current_volume.lock().unwrap();
-        sink.set_volume(volume);
-        
         // Add the source - if skip went past the end, this will be empty
-        sink.append(source);
+        sink.append(mixed_source);
         
         // Check if the sink is already empty (seeked past the end)
         let is_empty = sink.empty();
@@ -211,6 +221,24 @@ impl AudioPlayer {
 
     pub fn get_volume(&self) -> f32 {
         *self.current_volume.lock().unwrap()
+    }
+
+    pub fn set_left_volume(&self, volume: f32) {
+        let volume = volume.clamp(0.0, 1.0);
+        *self.left_volume.lock().unwrap() = volume;
+    }
+
+    pub fn set_right_volume(&self, volume: f32) {
+        let volume = volume.clamp(0.0, 1.0);
+        *self.right_volume.lock().unwrap() = volume;
+    }
+
+    pub fn get_left_volume(&self) -> f32 {
+        *self.left_volume.lock().unwrap()
+    }
+
+    pub fn get_right_volume(&self) -> f32 {
+        *self.right_volume.lock().unwrap()
     }
 
     pub fn is_playing(&self) -> bool {

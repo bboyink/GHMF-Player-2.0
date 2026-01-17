@@ -1,6 +1,7 @@
 use super::theme;
 use crate::plc::PlcStatus;
 use egui::{Ui, RichText, Color32};
+use std::sync::Arc;
 use std::time::Instant;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -11,7 +12,17 @@ pub enum StatusType {
     Error,
 }
 
-pub fn show(ui: &mut Ui, message: &str, status_type: StatusType, status_time: Instant, dmx_connected: bool, plc_status: &PlcStatus, use_rgbw: bool) {
+pub fn show(
+    ui: &mut Ui,
+    message: &str,
+    status_type: StatusType,
+    status_time: Instant,
+    dmx_connected: bool,
+    plc_status: &PlcStatus,
+    use_rgbw: bool,
+    cookie_icon: Option<&Arc<egui::TextureHandle>>,
+    on_cookie_clicked: &mut bool,
+) {
     ui.horizontal(|ui| {
         // Status icon and message
         let (icon, color) = match status_type {
@@ -53,14 +64,27 @@ pub fn show(ui: &mut Ui, message: &str, status_type: StatusType, status_time: In
         ui.label(RichText::new("PLC:").color(theme::AppColors::TEXT_SECONDARY).size(11.0));
         ui.label(RichText::new(plc_text).color(plc_color).size(11.0));
         
-        // Time since status update
-        let elapsed = status_time.elapsed().as_secs();
-        if elapsed < 60 {
-            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+        // Right side: Cookie icon and time
+        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+            // Cookie icon Easter egg
+            if let Some(icon) = cookie_icon {
+                let icon_size = egui::vec2(20.0, 20.0);
+                let dark_gray = Color32::from_rgb(80, 80, 80);
+                if ui.add(egui::ImageButton::new(egui::Image::new(icon.as_ref()).fit_to_exact_size(icon_size).tint(dark_gray)).frame(false))
+                    .on_hover_text("🥠 Click for a fortune cookie!")
+                    .clicked()
+                {
+                    *on_cookie_clicked = true;
+                }
+            }
+            
+            // Time since status update
+            let elapsed = status_time.elapsed().as_secs();
+            if elapsed < 60 {
                 ui.label(RichText::new(format!("{}s ago", elapsed))
                     .color(theme::AppColors::TEXT_DISABLED)
                     .size(11.0));
-            });
-        }
+            }
+        });
     });
 }

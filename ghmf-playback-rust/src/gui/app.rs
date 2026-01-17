@@ -96,6 +96,12 @@ pub struct PlaybackApp {
     
     // File dialog result channel
     folder_dialog_rx: Option<std::sync::mpsc::Receiver<(String, String)>>, // (folder_type, path)
+    
+    // Fortune cookie Easter egg
+    fortunes: Vec<String>,
+    show_fortune_dialog: bool,
+    current_fortune: String,
+    cookie_icon: Option<Arc<egui::TextureHandle>>,
 }
 
 
@@ -144,6 +150,10 @@ impl Default for PlaybackApp {
             playback_panel_state: playback_panel::PlaybackPanelState::default(),
             toasts: Toasts::default(),
             folder_dialog_rx: None,
+            fortunes: Vec::new(),
+            show_fortune_dialog: false,
+            current_fortune: String::new(),
+            cookie_icon: None,
         }
     }
 }
@@ -155,6 +165,9 @@ impl PlaybackApp {
         
         let mut app = Self::default();
         
+        // Reload operator panel with correct playlist folder (since Default uses hardcoded path)
+        app.operator_panel.load_pre_show_playlist(&app.settings.playlist_folder);
+        
         // Set announcements folder from settings
         app.playback_panel_state.announcements_folder = app.settings.announcements_folder.clone();
         
@@ -163,6 +176,12 @@ impl PlaybackApp {
         app.initialize_dmx();
         app.initialize_plc();
         app.initialize_csv_config();
+        
+        // Load fortune cookies
+        app.load_fortunes();
+        
+        // Load cookie icon
+        app.load_cookie_icon(&cc.egui_ctx);
         
         // Load first song from Pre-Show playlist if available
         app.load_first_pre_show_song();
@@ -281,6 +300,65 @@ impl PlaybackApp {
         }
     }
     
+    fn load_fortunes(&mut self) {
+        let fortune_path = std::path::PathBuf::from("Config/fortune-cookies.json");
+        
+        match std::fs::read_to_string(&fortune_path) {
+            Ok(content) => {
+                match serde_json::from_str::<Vec<String>>(&content) {
+                    Ok(fortunes) => {
+                        self.fortunes = fortunes;
+                        info!("Loaded {} fortune cookies", self.fortunes.len());
+                    }
+                    Err(e) => {
+                        warn!("Failed to parse fortunes: {}", e);
+                    }
+                }
+            }
+            Err(e) => {
+                warn!("Failed to load fortunes from {:?}: {}", fortune_path, e);
+            }
+        }
+    }
+    
+    fn load_cookie_icon(&mut self, ctx: &egui::Context) {
+        let icon_path = std::path::PathBuf::from("assets/cookie.png");
+        
+        if let Ok(image) = image::open(&icon_path) {
+            let rgba_image = image.to_rgba8();
+            let size = [rgba_image.width() as usize, rgba_image.height() as usize];
+            let pixels = rgba_image.as_flat_samples();
+            
+            let color_image = egui::ColorImage::from_rgba_unmultiplied(
+                size,
+                pixels.as_slice()
+            );
+            
+            let texture = ctx.load_texture(
+                "cookie_icon",
+                color_image,
+                egui::TextureOptions::default()
+            );
+            
+            self.cookie_icon = Some(Arc::new(texture));
+            info!("Loaded cookie icon");
+        } else {
+            warn!("Failed to load cookie icon from {:?}", icon_path);
+        }
+    }
+    
+    fn show_random_fortune(&mut self) {
+        if self.fortunes.is_empty() {
+            self.current_fortune = "No fortunes available!".to_string();
+        } else {
+            use rand::Rng;
+            let mut rng = rand::thread_rng();
+            let index = rng.gen_range(0..self.fortunes.len());
+            self.current_fortune = self.fortunes[index].clone();
+        }
+        self.show_fortune_dialog = true;
+    }
+    
     fn load_first_pre_show_song(&mut self) {
         // Try to get the first song from Pre-Show playlist
         if let Some(song_path) = self.operator_panel.get_next_song_from_current_playlist() {
@@ -374,8 +452,8 @@ impl PlaybackApp {
                 self.is_playing = player.is_playing();
                 self.is_paused = player.is_paused();
                 self.playback_position = player.get_position();
-                self.master_volume = player.get_volume();
-                self.playback_panel_state.left_volume = player.get_volume();
+                self.master_volume = player.get_left_volume();
+                self.playback_panel_state.left_volume = player.get_left_volume();
                 
                 // Don't check for song finished if we're playing an announcement
                 let finished = if self.playback_panel_state.playing_announcement {
@@ -1039,7 +1117,7 @@ impl PlaybackApp {
             // but are necessary to populate the playlist display
             match playlist_type.as_str() {
                 "Pre-Show" => {
-                    self.operator_panel.load_pre_show_playlist();
+                    self.operator_panel.load_pre_show_playlist(&self.settings.playlist_folder);
                     // Load first song from Pre-Show
                     if let Some(song_path) = self.operator_panel.get_next_song_from_current_playlist() {
                         self.load_song(song_path);
@@ -1065,7 +1143,7 @@ impl PlaybackApp {
                     }
                 }
                 "Testing" => {
-                    self.operator_panel.load_testing_playlist();
+                    self.operator_panel.load_testing_playlist(&self.settings.playlist_folder);
                     // Load first song from Testing playlist
                     if let Some(song_path) = self.operator_panel.get_next_song_from_current_playlist() {
                         self.load_song(song_path);
@@ -1989,6 +2067,7 @@ impl eframe::App for PlaybackApp {
                 .fill(theme::AppColors::SURFACE)
                 .inner_margin(8.0))
             .show(ctx, |ui| {
+            let mut cookie_clicked = false;
             status_panel::show(
                 ui,
                 &self.status_message,
@@ -1996,8 +2075,14 @@ impl eframe::App for PlaybackApp {
                 self.status_time,
                 self.dmx_connected,
                 &self.plc_status,
-                self.settings.use_rgbw
+                self.settings.use_rgbw,
+                self.cookie_icon.as_ref(),
+                &mut cookie_clicked,
             );
+            
+            if cookie_clicked {
+                self.show_random_fortune();
+            }
         });
         
         // Left sidebar navigation with dark background
@@ -2020,6 +2105,7 @@ impl eframe::App for PlaybackApp {
                         
                         // Reset operator panel to fresh state
                         self.operator_panel = crate::gui::operator_panel::OperatorPanel::new();
+                        self.operator_panel.load_pre_show_playlist(&self.settings.playlist_folder);
                         
                         // Load the first Pre-Show song without blocking
                         self.load_first_pre_show_song();
@@ -2104,6 +2190,44 @@ impl eframe::App for PlaybackApp {
             
             if should_close.get() {
                 self.show_about = false;
+            }
+        }
+        
+        // Fortune Cookie Easter Egg Dialog
+        if self.show_fortune_dialog {
+            let should_close = std::cell::Cell::new(false);
+            
+            egui::Window::new("🥠 Fortune Cookie")
+                .open(&mut self.show_fortune_dialog)
+                .resizable(false)
+                .collapsible(false)
+                .anchor(egui::Align2::CENTER_CENTER, egui::vec2(0.0, 0.0))
+                .show(ctx, |ui| {
+                    ui.vertical_centered(|ui| {
+                        // Show cookie image if available
+                        if let Some(icon) = &self.cookie_icon {
+                            let icon_size = egui::vec2(100.0, 100.0);
+                            ui.add(egui::Image::new(icon.as_ref()).fit_to_exact_size(icon_size));
+                            ui.add_space(15.0);
+                        }
+                        
+                        // Show fortune text
+                        ui.label(
+                            egui::RichText::new(&self.current_fortune)
+                                .size(16.0)
+                                .color(theme::AppColors::TEXT_PRIMARY)
+                        );
+                        ui.add_space(20.0);
+                        
+                        // Close button
+                        if ui.button("Close").clicked() {
+                            should_close.set(true);
+                        }
+                    });
+                });
+            
+            if should_close.get() {
+                self.show_fortune_dialog = false;
             }
         }
         

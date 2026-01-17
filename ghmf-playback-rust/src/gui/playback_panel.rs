@@ -7,6 +7,8 @@ use std::path::PathBuf;
 
 pub struct PlaybackPanelState {
     pub left_volume: f32,  // 0.0 to 1.0 (display as 0-100)
+    pub right_volume: f32, // 0.0 to 1.0 (display as 0-100)
+    pub mute_right: bool,  // Track mute state for right volume
     pub show_announcement_popup: bool,
     pub announcement_files: Vec<PathBuf>,
     pub announcements_folder: String, // Path to announcements folder from settings
@@ -23,12 +25,15 @@ pub struct PlaybackPanelState {
     pub scrolling_buffer: Option<ScrollingWaveformBuffer>, // Optimized scrolling buffer
     pub megaphone_icon: Option<Arc<TextureHandle>>, // Megaphone icon for announcements
     pub audio_up_icon: Option<Arc<TextureHandle>>, // Audio up icon for volume
+    pub mute_icon: Option<Arc<TextureHandle>>, // Mute icon for right channel
 }
 
 impl Default for PlaybackPanelState {
     fn default() -> Self {
         Self {
             left_volume: 0.35,  // Default 35%
+            right_volume: 0.45, // Fixed at 45% when unmuted
+            mute_right: false,  // Not muted by default
             show_announcement_popup: false,
             announcement_files: Vec::new(),
             announcements_folder: "Music/Announcements".to_string(), // Default fallback
@@ -45,6 +50,7 @@ impl Default for PlaybackPanelState {
             waveform_data: None, // Will be loaded when a song is loaded
             megaphone_icon: None, // Will be loaded on first use
             audio_up_icon: None, // Will be loaded on first use
+            mute_icon: None, // Will be loaded on first use
         }
     }
 }
@@ -129,6 +135,30 @@ impl PlaybackPanelState {
             );
             
             self.audio_up_icon = Some(Arc::new(texture));
+        }
+    }
+    
+    /// Load mute icon (called lazily when needed)
+    pub fn load_mute_icon(&mut self, ctx: &egui::Context) {
+        if self.mute_icon.is_some() {
+            return; // Already loaded
+        }
+        
+        let icon_bytes = include_bytes!("../../assets/mute.png");
+        
+        if let Ok(image) = image::load_from_memory(icon_bytes) {
+            let rgba = image.to_rgba8();
+            let size = [rgba.width() as usize, rgba.height() as usize];
+            let pixels = rgba.as_flat_samples();
+            let color_image = ColorImage::from_rgba_unmultiplied(size, pixels.as_slice());
+            
+            let texture = ctx.load_texture(
+                "mute_icon",
+                color_image,
+                Default::default()
+            );
+            
+            self.mute_icon = Some(Arc::new(texture));
         }
     }
 }
@@ -315,7 +345,7 @@ pub fn show(
                 if slider_response.changed() {
                     if let Some(player) = audio_player {
                         if let Ok(player) = player.lock() {
-                            player.set_volume(state.left_volume);
+                            player.set_left_volume(state.left_volume);
                         }
                     }
                 }
@@ -336,7 +366,42 @@ pub fn show(
                             .size(14.0)
                             .color(theme::AppColors::TEXT_PRIMARY));
                     });
-                cursor_x += 100.0; // 50px box + 50px spacing
+                cursor_x += 70.0; // 50px box + 20px spacing
+                
+                // Mute button after volume readout
+                state.load_mute_icon(ui.ctx());
+                if let Some(ref mute_icon) = state.mute_icon {
+                    let mute_btn_rect = egui::Rect::from_min_size(
+                        egui::Pos2::new(cursor_x, top_y),
+                        egui::Vec2::new(row_height, row_height) // Square button
+                    );
+                    let mut mute_btn_ui = ui.child_ui(mute_btn_rect, egui::Layout::centered_and_justified(egui::Direction::LeftToRight), None);
+                    
+                    let image = egui::Image::new(mute_icon.as_ref())
+                        .fit_to_exact_size(egui::Vec2::new(row_height - 4.0, row_height - 4.0))
+                        .tint(if state.mute_right { 
+                            egui::Color32::from_rgb(239, 68, 68) // Red when muted
+                        } else { 
+                            egui::Color32::WHITE // White when unmuted
+                        });
+                    
+                    let mute_button = mute_btn_ui.add(
+                        egui::ImageButton::new(image)
+                            .frame(false) // Remove border/frame
+                    );
+                    if mute_button.clicked() {
+                        state.mute_right = !state.mute_right;
+                        // Right volume is always 0.45 when unmuted, 0.0 when muted
+                        state.right_volume = if state.mute_right { 0.0 } else { 0.45 };
+                        // Update audio player
+                        if let Some(player) = audio_player {
+                            if let Ok(player) = player.lock() {
+                                player.set_right_volume(state.right_volume);
+                            }
+                        }
+                    }
+                    cursor_x += row_height + 20.0; // Icon size + 20px spacing
+                }
                 
                 // Icon at exact position (after percentage)
                 state.load_audio_up_icon(ui.ctx());
@@ -362,7 +427,7 @@ pub fn show(
                         state.left_volume = preset as f32 / 100.0;
                         if let Some(player) = audio_player {
                             if let Ok(player) = player.lock() {
-                                player.set_volume(state.left_volume);
+                                player.set_left_volume(state.left_volume);
                             }
                         }
                     }

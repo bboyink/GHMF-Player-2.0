@@ -249,15 +249,13 @@ impl Default for OperatorPanel {
 
 impl OperatorPanel {
     pub fn new() -> Self {
-        let mut panel = Self::default();
-        panel.load_pre_show_playlist();
-        panel
+        Self::default()
     }
     
     /// Load Pre-Show playlist from the Music/Playlists folder
-    pub fn load_pre_show_playlist(&mut self) {
+    pub fn load_pre_show_playlist(&mut self, playlist_folder: &str) {
         let today = Local::now().date_naive();
-        let playlist_folder = shellexpand::tilde("~/Desktop/GHMF Playback 2.0/Music/Playlists").to_string();
+        let playlist_folder = shellexpand::tilde(playlist_folder).to_string();
         
         // Try to find Pre-Show playlist (date-independent, same every day)
         if let Ok(entries) = fs::read_dir(&playlist_folder) {
@@ -304,9 +302,9 @@ impl OperatorPanel {
     }
     
     /// Load Testing playlist from the Music/Playlists folder
-    pub fn load_testing_playlist(&mut self) {
+    pub fn load_testing_playlist(&mut self, playlist_folder: &str) {
         let today = Local::now().date_naive();
-        let playlist_folder = shellexpand::tilde("~/Desktop/GHMF Playback 2.0/Music/Playlists").to_string();
+        let playlist_folder = shellexpand::tilde(playlist_folder).to_string();
         
         // Try to find Testing playlist (date-independent, same every day)
         if let Ok(entries) = fs::read_dir(&playlist_folder) {
@@ -1345,7 +1343,7 @@ impl OperatorPanel {
                 ui.vertical(|ui| {
                     // Header with title and CTL toggle button
                     ui.horizontal(|ui| {
-                        ui.label(RichText::new("DMX Fixture Layout").size(14.0).color(theme::AppColors::TEXT_SECONDARY));
+                        ui.label(RichText::new("DMX Output").size(14.0).color(theme::AppColors::TEXT_SECONDARY));
                         
                         // Push CTL button to the right
                         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
