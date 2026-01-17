@@ -1,8 +1,10 @@
 mod enttec;
 mod universe;
+mod sacn_output;
 
 pub use enttec::EnttecDmxPro;
 pub use universe::DmxUniverse;
+pub use sacn_output::{SacnOutput, SacnFilterMode, get_network_interfaces};
 
 use thiserror::Error;
 

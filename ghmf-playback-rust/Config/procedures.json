@@ -1,0 +1,16 @@
+{
+  "entries": [
+    {
+      "name": "Turn On  Amplifiers",
+      "minutes_before": 15
+    },
+    {
+      "name": "Two Minute Warning",
+      "minutes_before": 12
+    },
+    {
+      "name": "Start Pre-Show",
+      "minutes_before": 10
+    }
+  ]
+}

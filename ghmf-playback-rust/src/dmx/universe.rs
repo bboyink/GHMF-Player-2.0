@@ -48,10 +48,29 @@ impl DmxUniverse {
         }
         Ok(self.channels[channel - 1])
     }
+    
+    /// Get a channel value directly (0-indexed, for internal use)
+    pub fn get_channel_raw(&self, channel: usize) -> u8 {
+        if channel < DMX_UNIVERSE_SIZE {
+            self.channels[channel]
+        } else {
+            0
+        }
+    }
 
     /// Clear all channels to 0
     pub fn clear(&mut self) {
         self.channels.fill(0);
+    }
+    
+    /// Clear all channels to 0 except those in the ignore list (1-indexed)
+    pub fn clear_except(&mut self, ignore_channels: &[u16]) {
+        for (idx, channel) in self.channels.iter_mut().enumerate() {
+            let channel_num = (idx + 1) as u16;
+            if !ignore_channels.contains(&channel_num) {
+                *channel = 0;
+            }
+        }
     }
 
     /// Get the raw channel array

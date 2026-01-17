@@ -4,7 +4,7 @@ use std::path::Path;
 use csv::ReaderBuilder;
 use anyhow::{Context, Result};
 
-/// Color definition from ColorMap.csv
+/// Color definition from legacy_colors.json
 #[derive(Debug, Clone)]
 pub struct ColorDefinition {
     pub index: u16,
@@ -79,7 +79,7 @@ impl FcwDirective {
     }
 }
 
-/// FCW mapping from FCWMap.csv
+/// FCW mapping from light_groups.json
 #[derive(Debug, Clone)]
 pub struct FcwMapping {
     pub fcw_address: u16,
@@ -101,8 +101,8 @@ impl CsvConfig {
         let dir = dir.as_ref();
         
         let colors = Self::load_legacy_colors_json(dir.join("legacy_colors.json"))?;
-        let fixtures = Self::load_dmx_map(dir.join("DMXMap.csv"))?;
-        let fcw_mappings = Self::load_fcw_map(dir.join("FCWMap.CSV"))?;
+        let fixtures = Self::load_dmx_map_json(dir.join("dmx_mapping.json"))?;
+        let fcw_mappings = Self::load_light_groups_json(dir.join("light_groups.json"))?;
         
         Ok(Self {
             colors,
@@ -200,63 +200,112 @@ impl CsvConfig {
         Ok(fixtures)
     }
     
-    /// Load FCWMap.csv
-    fn load_fcw_map<P: AsRef<Path>>(path: P) -> Result<HashMap<u16, FcwMapping>> {
-        let file = File::open(path.as_ref())
-            .context(format!("Failed to open FCWMap.csv at {:?}", path.as_ref()))?;
+    /// Load DMX mappings from dmx_mapping.json
+    fn load_dmx_map_json<P: AsRef<Path>>(path: P) -> Result<HashMap<u16, FixtureDefinition>> {
+        #[derive(serde::Deserialize)]
+        struct DmxMapping {
+            fixture_id: u16,
+            fixture_name: String,
+            start_channel: u16,
+        }
         
-        let mut reader = ReaderBuilder::new()
-            .has_headers(true)
-            .from_reader(file);
+        #[derive(serde::Deserialize)]
+        struct DmxMappingFile {
+            mappings: Vec<DmxMapping>,
+        }
         
-        // Get headers to map fixture columns
-        let headers = reader.headers()?.clone();
+        let file_content = std::fs::read_to_string(path.as_ref())
+            .context(format!("Failed to read dmx_mapping.json at {:?}", path.as_ref()))?;
         
-        let mut fcw_mappings = HashMap::new();
+        let dmx_file: DmxMappingFile = serde_json::from_str(&file_content)
+            .context("Failed to parse dmx_mapping.json")?;
         
-        for result in reader.records() {
-            let record = result?;
-            
-            if record.is_empty() {
-                continue;
-            }
-            
-            let fcw_address: u16 = record[0].trim().parse()
-                .context("Failed to parse FCW address")?;
-            
-            let water_directive = if record.len() > 1 {
-                FcwDirective::from_str(&record[1])
+        let mut fixtures = HashMap::new();
+        
+        for mapping in dmx_file.mappings {
+            // Determine format based on fixture name or ID patterns
+            let format = if mapping.fixture_name.to_lowercase().contains("firework") || mapping.fixture_id >= 900 {
+                FixtureFormat::X
             } else {
-                FcwDirective::Off
+                // Most fixtures are RGBW now
+                FixtureFormat::RGBW
             };
             
-            let mut fixture_directives = HashMap::new();
+            let corrections = vec![1.0; format.channel_count()];
             
-            // Parse fixture directives (columns 2+)
-            for (col_idx, value) in record.iter().enumerate().skip(2) {
-                if col_idx >= headers.len() {
-                    break;
+            fixtures.insert(mapping.fixture_id, FixtureDefinition {
+                fixture_number: mapping.fixture_id,
+                note: mapping.fixture_name,
+                dmx_channel: mapping.start_channel,
+                format,
+                corrections,
+            });
+        }
+        
+        tracing::info!("Loaded {} fixtures from dmx_mapping.json", fixtures.len());
+        Ok(fixtures)
+    }
+    
+    /// Load light groups from JSON file
+    fn load_light_groups_json<P: AsRef<Path>>(path: P) -> Result<HashMap<u16, FcwMapping>> {
+        #[derive(serde::Deserialize)]
+        struct LightGroup {
+            name: String,
+            fcw_code: String,
+            fcw_fade_code: String,
+            fixture_ids: Vec<u8>,
+        }
+        
+        #[derive(serde::Deserialize)]
+        struct LightGroupConfig {
+            groups: Vec<LightGroup>,
+        }
+        
+        let json_data = std::fs::read_to_string(path.as_ref())
+            .context(format!("Failed to read light_groups.json at {:?}", path.as_ref()))?;
+        
+        let config: LightGroupConfig = serde_json::from_str(&json_data)
+            .context("Failed to parse light_groups.json")?;
+        
+        let mut fcw_mappings = HashMap::new();
+        let group_count = config.groups.len();
+        
+        for group in config.groups {
+            // Parse the FCW code (e.g., "017" -> 17)
+            if let Ok(fcw_code) = group.fcw_code.parse::<u16>() {
+                let mut fixture_directives = HashMap::new();
+                
+                // Map all fixtures in the group to "On" directive
+                for fixture_id in &group.fixture_ids {
+                    fixture_directives.insert(*fixture_id as u16, FcwDirective::On);
                 }
                 
-                // Get fixture number from header
-                if let Ok(fixture_num) = headers[col_idx].trim().parse::<u16>() {
-                    let directive = FcwDirective::from_str(value);
-                    if directive != FcwDirective::Off {
-                        fixture_directives.insert(fixture_num, directive);
-                    }
-                }
+                fcw_mappings.insert(fcw_code, FcwMapping {
+                    fcw_address: fcw_code,
+                    water_directive: FcwDirective::Off,
+                    fixture_directives,
+                });
             }
             
-            if !fixture_directives.is_empty() || water_directive != FcwDirective::Off {
-                fcw_mappings.insert(fcw_address, FcwMapping {
-                    fcw_address,
-                    water_directive,
+            // Parse the fade code (e.g., "117" -> 117)
+            if let Ok(fade_code) = group.fcw_fade_code.parse::<u16>() {
+                let mut fixture_directives = HashMap::new();
+                
+                // Map all fixtures in the group to "Fade" directive
+                for fixture_id in &group.fixture_ids {
+                    fixture_directives.insert(*fixture_id as u16, FcwDirective::Fade);
+                }
+                
+                fcw_mappings.insert(fade_code, FcwMapping {
+                    fcw_address: fade_code,
+                    water_directive: FcwDirective::Off,
                     fixture_directives,
                 });
             }
         }
         
-        tracing::info!("Loaded {} FCW mappings from FCWMap.csv", fcw_mappings.len());
+        tracing::info!("Loaded {} FCW mappings from light_groups.json ({} groups)", 
+                       fcw_mappings.len(), group_count);
         Ok(fcw_mappings)
     }
     

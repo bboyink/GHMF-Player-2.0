@@ -122,7 +122,7 @@ impl LegacyColorPanel {
         let available_height = ui.available_height() - 20.0;
 
         egui::ScrollArea::vertical()
-            .id_salt("legacy_color_scroll")
+            .id_source("legacy_color_scroll")
             .max_height(available_height)
             .show(ui, |ui| {
                 // Header

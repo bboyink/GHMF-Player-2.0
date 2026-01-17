@@ -34,6 +34,8 @@ pub struct FixtureDefinition {
     pub light_type: Option<LightType>,
     #[serde(default = "default_channel_count")]
     pub channel_count: u8,
+    #[serde(default = "default_ignore_reset")]
+    pub ignore_reset: bool,
 }
 
 fn default_fixture_type() -> FixtureType {
@@ -46,6 +48,10 @@ fn default_light_type() -> Option<LightType> {
 
 fn default_channel_count() -> u8 {
     4
+}
+
+fn default_ignore_reset() -> bool {
+    false
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -122,6 +128,7 @@ pub struct DmxMapPanel {
     new_fixture_type: FixtureType,
     new_light_type: LightType,
     new_channel_count: String,
+    new_ignore_reset: bool,
     
     // Delete confirmation dialog state
     show_delete_confirmation: bool,
@@ -137,69 +144,68 @@ impl Default for DmxMapPanel {
 impl DmxMapPanel {
     pub fn new() -> Self {
         let mut fixtures = vec![
-            FixtureDefinition { id: 1, name: "Mod. 1 Front Left".to_string(), fixture_type: FixtureType::Light, light_type: Some(LightType::RGBW), channel_count: 4 },
-            FixtureDefinition { id: 2, name: "Mod. 1 Front Right".to_string(), fixture_type: FixtureType::Light, light_type: Some(LightType::RGBW), channel_count: 4 },
-            FixtureDefinition { id: 3, name: "Mod. 1 Center".to_string(), fixture_type: FixtureType::Light, light_type: Some(LightType::RGBW), channel_count: 4 },
-            FixtureDefinition { id: 4, name: "Mod. 1 Back Left".to_string(), fixture_type: FixtureType::Light, light_type: Some(LightType::RGBW), channel_count: 4 },
-            FixtureDefinition { id: 5, name: "Mod. 1 Back Center".to_string(), fixture_type: FixtureType::Light, light_type: Some(LightType::RGBW), channel_count: 4 },
-            FixtureDefinition { id: 6, name: "Mod. 1 Back Right".to_string(), fixture_type: FixtureType::Light, light_type: Some(LightType::RGBW), channel_count: 4 },
+            FixtureDefinition { id: 1, name: "Mod 1 Front Left".to_string(), fixture_type: FixtureType::Light, light_type: Some(LightType::RGBW), channel_count: 4, ignore_reset: false },
+            FixtureDefinition { id: 2, name: "Mod 1 Front Right".to_string(), fixture_type: FixtureType::Light, light_type: Some(LightType::RGBW), channel_count: 4, ignore_reset: false },
+            FixtureDefinition { id: 3, name: "Mod 1 Center".to_string(), fixture_type: FixtureType::Light, light_type: Some(LightType::RGBW), channel_count: 4, ignore_reset: false },
+            FixtureDefinition { id: 4, name: "Mod 1 Back Left".to_string(), fixture_type: FixtureType::Light, light_type: Some(LightType::RGBW), channel_count: 4, ignore_reset: false },
+            FixtureDefinition { id: 5, name: "Mod 1 Back Center".to_string(), fixture_type: FixtureType::Light, light_type: Some(LightType::RGBW), channel_count: 4, ignore_reset: false },
+            FixtureDefinition { id: 6, name: "Mod 1 Back Right".to_string(), fixture_type: FixtureType::Light, light_type: Some(LightType::RGBW), channel_count: 4, ignore_reset: false },
             
-            FixtureDefinition { id: 7, name: "Mod. 2 Front Left".to_string(), fixture_type: FixtureType::Light, light_type: Some(LightType::RGBW), channel_count: 4 },
-            FixtureDefinition { id: 8, name: "Mod. 2 Front Right".to_string(), fixture_type: FixtureType::Light, light_type: Some(LightType::RGBW), channel_count: 4 },
-            FixtureDefinition { id: 9, name: "Mod. 2 Center".to_string(), fixture_type: FixtureType::Light, light_type: Some(LightType::RGBW), channel_count: 4 },
-            FixtureDefinition { id: 10, name: "Mod. 2 Back Left".to_string(), fixture_type: FixtureType::Light, light_type: Some(LightType::RGBW), channel_count: 4 },
-            FixtureDefinition { id: 11, name: "Mod. 2 Back Center".to_string(), fixture_type: FixtureType::Light, light_type: Some(LightType::RGBW), channel_count: 4 },
-            FixtureDefinition { id: 12, name: "Mod. 2 Back Right".to_string(), fixture_type: FixtureType::Light, light_type: Some(LightType::RGBW), channel_count: 4 },
+            FixtureDefinition { id: 7, name: "Mod 2 Front Left".to_string(), fixture_type: FixtureType::Light, light_type: Some(LightType::RGBW), channel_count: 4, ignore_reset: false },
+            FixtureDefinition { id: 8, name: "Mod 2 Front Right".to_string(), fixture_type: FixtureType::Light, light_type: Some(LightType::RGBW), channel_count: 4, ignore_reset: false },
+            FixtureDefinition { id: 9, name: "Mod 2 Center".to_string(), fixture_type: FixtureType::Light, light_type: Some(LightType::RGBW), channel_count: 4, ignore_reset: false },
+            FixtureDefinition { id: 10, name: "Mod 2 Back Left".to_string(), fixture_type: FixtureType::Light, light_type: Some(LightType::RGBW), channel_count: 4, ignore_reset: false },
+            FixtureDefinition { id: 11, name: "Mod 2 Back Center".to_string(), fixture_type: FixtureType::Light, light_type: Some(LightType::RGBW), channel_count: 4, ignore_reset: false },
+            FixtureDefinition { id: 12, name: "Mod 2 Back Right".to_string(), fixture_type: FixtureType::Light, light_type: Some(LightType::RGBW), channel_count: 4, ignore_reset: false },
             
-            FixtureDefinition { id: 13, name: "Mod. 3 Front Left".to_string(), fixture_type: FixtureType::Light, light_type: Some(LightType::RGBW), channel_count: 4 },
-            FixtureDefinition { id: 14, name: "Mod. 3 Front Right".to_string(), fixture_type: FixtureType::Light, light_type: Some(LightType::RGBW), channel_count: 4 },
-            FixtureDefinition { id: 15, name: "Mod. 3 Center".to_string(), fixture_type: FixtureType::Light, light_type: Some(LightType::RGBW), channel_count: 4 },
-            FixtureDefinition { id: 16, name: "Mod. 3 Back Left".to_string(), fixture_type: FixtureType::Light, light_type: Some(LightType::RGBW), channel_count: 4 },
-            FixtureDefinition { id: 17, name: "Mod. 3 Back Center".to_string(), fixture_type: FixtureType::Light, light_type: Some(LightType::RGBW), channel_count: 4 },
-            FixtureDefinition { id: 18, name: "Mod. 3 Back Right".to_string(), fixture_type: FixtureType::Light, light_type: Some(LightType::RGBW), channel_count: 4 },
+            FixtureDefinition { id: 13, name: "Mod 3 Front Left".to_string(), fixture_type: FixtureType::Light, light_type: Some(LightType::RGBW), channel_count: 4, ignore_reset: false },
+            FixtureDefinition { id: 14, name: "Mod 3 Front Right".to_string(), fixture_type: FixtureType::Light, light_type: Some(LightType::RGBW), channel_count: 4, ignore_reset: false },
+            FixtureDefinition { id: 15, name: "Mod 3 Center".to_string(), fixture_type: FixtureType::Light, light_type: Some(LightType::RGBW), channel_count: 4, ignore_reset: false },
+            FixtureDefinition { id: 16, name: "Mod 3 Back Left".to_string(), fixture_type: FixtureType::Light, light_type: Some(LightType::RGBW), channel_count: 4, ignore_reset: false },
+            FixtureDefinition { id: 17, name: "Mod 3 Back Center".to_string(), fixture_type: FixtureType::Light, light_type: Some(LightType::RGBW), channel_count: 4, ignore_reset: false },
+            FixtureDefinition { id: 18, name: "Mod 3 Back Right".to_string(), fixture_type: FixtureType::Light, light_type: Some(LightType::RGBW), channel_count: 4, ignore_reset: false },
             
-            FixtureDefinition { id: 19, name: "Mod. 4 Front Left".to_string(), fixture_type: FixtureType::Light, light_type: Some(LightType::RGBW), channel_count: 4 },
-            FixtureDefinition { id: 20, name: "Mod. 4 Front Right".to_string(), fixture_type: FixtureType::Light, light_type: Some(LightType::RGBW), channel_count: 4 },
-            FixtureDefinition { id: 21, name: "Mod. 4 Center".to_string(), fixture_type: FixtureType::Light, light_type: Some(LightType::RGBW), channel_count: 4 },
-            FixtureDefinition { id: 22, name: "Mod. 4 Back Left".to_string(), fixture_type: FixtureType::Light, light_type: Some(LightType::RGBW), channel_count: 4 },
-            FixtureDefinition { id: 23, name: "Mod. 4 Back Center".to_string(), fixture_type: FixtureType::Light, light_type: Some(LightType::RGBW), channel_count: 4 },
-            FixtureDefinition { id: 24, name: "Mod. 4 Back Right".to_string(), fixture_type: FixtureType::Light, light_type: Some(LightType::RGBW), channel_count: 4 },
+            FixtureDefinition { id: 19, name: "Mod 4 Front Left".to_string(), fixture_type: FixtureType::Light, light_type: Some(LightType::RGBW), channel_count: 4, ignore_reset: false },
+            FixtureDefinition { id: 20, name: "Mod 4 Front Right".to_string(), fixture_type: FixtureType::Light, light_type: Some(LightType::RGBW), channel_count: 4, ignore_reset: false },
+            FixtureDefinition { id: 21, name: "Mod 4 Center".to_string(), fixture_type: FixtureType::Light, light_type: Some(LightType::RGBW), channel_count: 4, ignore_reset: false },
+            FixtureDefinition { id: 22, name: "Mod 4 Back Left".to_string(), fixture_type: FixtureType::Light, light_type: Some(LightType::RGBW), channel_count: 4, ignore_reset: false },
+            FixtureDefinition { id: 23, name: "Mod 4 Back Right".to_string(), fixture_type: FixtureType::Light, light_type: Some(LightType::RGBW), channel_count: 4, ignore_reset: false },
             
-            FixtureDefinition { id: 25, name: "Mod. 5 Front Left".to_string(), fixture_type: FixtureType::Light, light_type: Some(LightType::RGBW), channel_count: 4 },
-            FixtureDefinition { id: 26, name: "Mod. 5 Front Right".to_string(), fixture_type: FixtureType::Light, light_type: Some(LightType::RGBW), channel_count: 4 },
-            FixtureDefinition { id: 27, name: "Mod. 5 Center".to_string(), fixture_type: FixtureType::Light, light_type: Some(LightType::RGBW), channel_count: 4 },
-            FixtureDefinition { id: 28, name: "Mod. 5 Back Left".to_string(), fixture_type: FixtureType::Light, light_type: Some(LightType::RGBW), channel_count: 4 },
-            FixtureDefinition { id: 29, name: "Mod. 5 Back Center".to_string(), fixture_type: FixtureType::Light, light_type: Some(LightType::RGBW), channel_count: 4 },
-            FixtureDefinition { id: 30, name: "Mod. 5 Back Right".to_string(), fixture_type: FixtureType::Light, light_type: Some(LightType::RGBW), channel_count: 4 },
+            FixtureDefinition { id: 24, name: "Mod 5 Front Left".to_string(), fixture_type: FixtureType::Light, light_type: Some(LightType::RGBW), channel_count: 4, ignore_reset: false },
+            FixtureDefinition { id: 25, name: "Mod 5 Front Right".to_string(), fixture_type: FixtureType::Light, light_type: Some(LightType::RGBW), channel_count: 4, ignore_reset: false },
+            FixtureDefinition { id: 26, name: "Mod 5 Center".to_string(), fixture_type: FixtureType::Light, light_type: Some(LightType::RGBW), channel_count: 4, ignore_reset: false },
+            FixtureDefinition { id: 27, name: "Mod 5 Back Left".to_string(), fixture_type: FixtureType::Light, light_type: Some(LightType::RGBW), channel_count: 4, ignore_reset: false },
+            FixtureDefinition { id: 28, name: "Mod 5 Back Center".to_string(), fixture_type: FixtureType::Light, light_type: Some(LightType::RGBW), channel_count: 4, ignore_reset: false },
+            FixtureDefinition { id: 29, name: "Mod 5 Back Right".to_string(), fixture_type: FixtureType::Light, light_type: Some(LightType::RGBW), channel_count: 4, ignore_reset: false },
             
-            FixtureDefinition { id: 31, name: "Mod. 6 Front Left".to_string(), fixture_type: FixtureType::Light, light_type: Some(LightType::RGBW), channel_count: 4 },
-            FixtureDefinition { id: 32, name: "Mod. 6 Front Right".to_string(), fixture_type: FixtureType::Light, light_type: Some(LightType::RGBW), channel_count: 4 },
-            FixtureDefinition { id: 33, name: "Mod. 6 Center".to_string(), fixture_type: FixtureType::Light, light_type: Some(LightType::RGBW), channel_count: 4 },
-            FixtureDefinition { id: 34, name: "Mod. 6 Back Left".to_string(), fixture_type: FixtureType::Light, light_type: Some(LightType::RGBW), channel_count: 4 },
-            FixtureDefinition { id: 35, name: "Mod. 6 Back Center".to_string(), fixture_type: FixtureType::Light, light_type: Some(LightType::RGBW), channel_count: 4 },
-            FixtureDefinition { id: 36, name: "Mod. 6 Back Right".to_string(), fixture_type: FixtureType::Light, light_type: Some(LightType::RGBW), channel_count: 4 },
+            FixtureDefinition { id: 30, name: "Mod 6 Front Left".to_string(), fixture_type: FixtureType::Light, light_type: Some(LightType::RGBW), channel_count: 4, ignore_reset: false },
+            FixtureDefinition { id: 31, name: "Mod 6 Front Right".to_string(), fixture_type: FixtureType::Light, light_type: Some(LightType::RGBW), channel_count: 4, ignore_reset: false },
+            FixtureDefinition { id: 32, name: "Mod 6 Center".to_string(), fixture_type: FixtureType::Light, light_type: Some(LightType::RGBW), channel_count: 4, ignore_reset: false },
+            FixtureDefinition { id: 33, name: "Mod 6 Back Left".to_string(), fixture_type: FixtureType::Light, light_type: Some(LightType::RGBW), channel_count: 4, ignore_reset: false },
+            FixtureDefinition { id: 34, name: "Mod 6 Back Center".to_string(), fixture_type: FixtureType::Light, light_type: Some(LightType::RGBW), channel_count: 4, ignore_reset: false },
+            FixtureDefinition { id: 35, name: "Mod 6 Back Right".to_string(), fixture_type: FixtureType::Light, light_type: Some(LightType::RGBW), channel_count: 4, ignore_reset: false },
             
-            FixtureDefinition { id: 37, name: "Mod. 7 Front Left".to_string(), fixture_type: FixtureType::Light, light_type: Some(LightType::RGBW), channel_count: 4 },
-            FixtureDefinition { id: 38, name: "Mod. 7 Front Right".to_string(), fixture_type: FixtureType::Light, light_type: Some(LightType::RGBW), channel_count: 4 },
-            FixtureDefinition { id: 39, name: "Mod. 7 Center".to_string(), fixture_type: FixtureType::Light, light_type: Some(LightType::RGBW), channel_count: 4 },
-            FixtureDefinition { id: 40, name: "Mod. 7 Back Left".to_string(), fixture_type: FixtureType::Light, light_type: Some(LightType::RGBW), channel_count: 4 },
-            FixtureDefinition { id: 41, name: "Mod. 7 Back Center".to_string(), fixture_type: FixtureType::Light, light_type: Some(LightType::RGBW), channel_count: 4 },
-            FixtureDefinition { id: 42, name: "Mod. 7 Back Right".to_string(), fixture_type: FixtureType::Light, light_type: Some(LightType::RGBW), channel_count: 4 },
+            FixtureDefinition { id: 36, name: "Mod 7 Front Left".to_string(), fixture_type: FixtureType::Light, light_type: Some(LightType::RGBW), channel_count: 4, ignore_reset: false },
+            FixtureDefinition { id: 37, name: "Mod 7 Front Right".to_string(), fixture_type: FixtureType::Light, light_type: Some(LightType::RGBW), channel_count: 4, ignore_reset: false },
+            FixtureDefinition { id: 38, name: "Mod 7 Center".to_string(), fixture_type: FixtureType::Light, light_type: Some(LightType::RGBW), channel_count: 4, ignore_reset: false },
+            FixtureDefinition { id: 39, name: "Mod 7 Back Left".to_string(), fixture_type: FixtureType::Light, light_type: Some(LightType::RGBW), channel_count: 4, ignore_reset: false },
+            FixtureDefinition { id: 40, name: "Mod 7 Back Center".to_string(), fixture_type: FixtureType::Light, light_type: Some(LightType::RGBW), channel_count: 4, ignore_reset: false },
+            FixtureDefinition { id: 41, name: "Mod 7 Back Right".to_string(), fixture_type: FixtureType::Light, light_type: Some(LightType::RGBW), channel_count: 4, ignore_reset: false },
             
-            FixtureDefinition { id: 43, name: "Peacock Light 1".to_string(), fixture_type: FixtureType::Light, light_type: Some(LightType::RGBW), channel_count: 4 },
-            FixtureDefinition { id: 44, name: "Peacock Light 2".to_string(), fixture_type: FixtureType::Light, light_type: Some(LightType::RGBW), channel_count: 4 },
-            FixtureDefinition { id: 45, name: "Peacock Light 3".to_string(), fixture_type: FixtureType::Light, light_type: Some(LightType::RGBW), channel_count: 4 },
-            FixtureDefinition { id: 46, name: "Peacock Light 4".to_string(), fixture_type: FixtureType::Light, light_type: Some(LightType::RGBW), channel_count: 4 },
-            FixtureDefinition { id: 47, name: "Peacock Light 5".to_string(), fixture_type: FixtureType::Light, light_type: Some(LightType::RGBW), channel_count: 4 },
-            FixtureDefinition { id: 48, name: "Peacock Light 6".to_string(), fixture_type: FixtureType::Light, light_type: Some(LightType::RGBW), channel_count: 4 },
-            FixtureDefinition { id: 49, name: "Peacock Back Left".to_string(), fixture_type: FixtureType::Light, light_type: Some(LightType::RGBW), channel_count: 4 },
-            FixtureDefinition { id: 50, name: "Peacock Back Right".to_string(), fixture_type: FixtureType::Light, light_type: Some(LightType::RGBW), channel_count: 4 },
+            FixtureDefinition { id: 42, name: "Peacock 1".to_string(), fixture_type: FixtureType::Light, light_type: Some(LightType::RGBW), channel_count: 4, ignore_reset: false },
+            FixtureDefinition { id: 43, name: "Peacock 2".to_string(), fixture_type: FixtureType::Light, light_type: Some(LightType::RGBW), channel_count: 4, ignore_reset: false },
+            FixtureDefinition { id: 44, name: "Peacock 3".to_string(), fixture_type: FixtureType::Light, light_type: Some(LightType::RGBW), channel_count: 4, ignore_reset: false },
+            FixtureDefinition { id: 45, name: "Peacock 4".to_string(), fixture_type: FixtureType::Light, light_type: Some(LightType::RGBW), channel_count: 4, ignore_reset: false },
+            FixtureDefinition { id: 46, name: "Peacock 5".to_string(), fixture_type: FixtureType::Light, light_type: Some(LightType::RGBW), channel_count: 4, ignore_reset: false },
+            FixtureDefinition { id: 47, name: "Peacock 6".to_string(), fixture_type: FixtureType::Light, light_type: Some(LightType::RGBW), channel_count: 4, ignore_reset: false },
+            FixtureDefinition { id: 48, name: "Peackcok Left".to_string(), fixture_type: FixtureType::Light, light_type: Some(LightType::RGBW), channel_count: 4, ignore_reset: false },
+            FixtureDefinition { id: 49, name: "Peacock Right".to_string(), fixture_type: FixtureType::Light, light_type: Some(LightType::RGBW), channel_count: 4, ignore_reset: false },
             
-            FixtureDefinition { id: 51, name: "Helix Left".to_string(), fixture_type: FixtureType::Light, light_type: Some(LightType::RGBW), channel_count: 4 },
-            FixtureDefinition { id: 52, name: "Helix Right".to_string(), fixture_type: FixtureType::Light, light_type: Some(LightType::RGBW), channel_count: 4 },
+            FixtureDefinition { id: 50, name: "Spout/Helix Left".to_string(), fixture_type: FixtureType::Light, light_type: Some(LightType::RGBW), channel_count: 4, ignore_reset: false },
+            FixtureDefinition { id: 51, name: "Spout/Helix Right".to_string(), fixture_type: FixtureType::Light, light_type: Some(LightType::RGBW), channel_count: 4, ignore_reset: false },
             
-            FixtureDefinition { id: 53, name: "Dove Left".to_string(), fixture_type: FixtureType::Light, light_type: Some(LightType::RGBW), channel_count: 4 },
-            FixtureDefinition { id: 54, name: "Dove Right".to_string(), fixture_type: FixtureType::Light, light_type: Some(LightType::RGBW), channel_count: 4 },
+            FixtureDefinition { id: 52, name: "Dove Left".to_string(), fixture_type: FixtureType::Light, light_type: Some(LightType::RGBW), channel_count: 4, ignore_reset: false },
+            FixtureDefinition { id: 53, name: "Dove Right".to_string(), fixture_type: FixtureType::Light, light_type: Some(LightType::RGBW), channel_count: 4, ignore_reset: false },
         ];
 
         let config_path = "Config/dmx_mapping.json".to_string();
@@ -226,6 +232,7 @@ impl DmxMapPanel {
             new_fixture_type: FixtureType::Light,
             new_light_type: LightType::RGBW,
             new_channel_count: "4".to_string(),
+            new_ignore_reset: false,
             show_delete_confirmation: false,
             fixture_to_delete_id: None,
         }
@@ -297,7 +304,7 @@ impl DmxMapPanel {
         let available_height = ui.available_height() - 100.0;
 
         egui::ScrollArea::vertical()
-            .id_salt("fixture_list_scroll")
+            .id_source("fixture_list_scroll")
             .max_height(available_height)
             .show(ui, |ui| {
                 ui.set_max_width(230.0);
@@ -406,6 +413,7 @@ impl DmxMapPanel {
             self.new_fixture_type = FixtureType::Light;
             self.new_light_type = LightType::RGBW;
             self.new_channel_count = "4".to_string();
+            self.new_ignore_reset = false;
         }
             });
     }
@@ -446,7 +454,7 @@ impl DmxMapPanel {
         }
 
         let scroll = egui::ScrollArea::both()
-            .id_salt("dmx_grid_scroll")
+            .id_source("dmx_grid_scroll")
             .show(ui, |ui| {
                 let total_width = GRID_COLS as f32 * (CELL_SIZE + CELL_PADDING) + 20.0; // Add space for scroll bar
                 let total_height = GRID_ROWS as f32 * (CELL_SIZE + CELL_PADDING) + 20.0; // Add space for scroll bar
@@ -724,6 +732,26 @@ impl DmxMapPanel {
         }
     }
     
+    /// Get list of DMX channels that should be ignored during reset
+    /// Returns a vector of channel numbers (1-512)
+    pub fn get_ignore_reset_channels(&self) -> Vec<u16> {
+        let mut ignore_channels = Vec::new();
+        
+        for mapping in &self.config.mappings {
+            if let Some(fixture) = self.fixtures.iter().find(|f| f.id == mapping.fixture_id) {
+                if fixture.ignore_reset {
+                    // Add all channels for this fixture
+                    for offset in 0..fixture.channel_count {
+                        let channel = mapping.start_channel + offset as u16;
+                        ignore_channels.push(channel);
+                    }
+                }
+            }
+        }
+        
+        ignore_channels
+    }
+    
     fn show_add_fixture_dialog(&mut self, ctx: &Context) {
         let mut should_close = false;
         let mut should_save = false;
@@ -733,6 +761,7 @@ impl DmxMapPanel {
             .resizable(false)
             .collapsible(false)
             .default_width(400.0)
+            .default_height(350.0)
             .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
             .show(ctx, |ui| {
                 ui.add_space(5.0);
@@ -765,6 +794,17 @@ impl DmxMapPanel {
                     // Other type - manual channel count
                     ui.label(egui::RichText::new("Number of Channels:").color(theme::AppColors::TEXT_PRIMARY));
                     ui.add(egui::TextEdit::singleline(&mut self.new_channel_count).desired_width(100.0));
+                    ui.add_space(10.0);
+                    
+                    // Ignore Reset checkbox for "Other" fixtures
+                    ui.checkbox(&mut self.new_ignore_reset, 
+                        egui::RichText::new("Ignore Reset")
+                            .color(theme::AppColors::TEXT_PRIMARY));
+                    ui.label(
+                        egui::RichText::new("If checked, reset will not change this channel to zero during playback")
+                            .size(11.0)
+                            .color(theme::AppColors::TEXT_SECONDARY)
+                    );
                 }
                 
                 ui.add_space(15.0);
@@ -869,6 +909,11 @@ impl DmxMapPanel {
                 None
             },
             channel_count,
+            ignore_reset: if self.new_fixture_type == FixtureType::Other {
+                self.new_ignore_reset
+            } else {
+                false
+            },
         };
         
         // Add to fixtures list

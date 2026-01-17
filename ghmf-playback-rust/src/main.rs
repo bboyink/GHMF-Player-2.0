@@ -12,13 +12,14 @@ use anyhow::Result;
 use tracing::info;
 use tracing_subscriber;
 
-fn main() -> Result<()> {
+#[tokio::main]
+async fn main() -> Result<()> {
     // Initialize logging
     tracing_subscriber::fmt()
         .with_env_filter("ghmf_playback=debug,info")
         .init();
 
-    info!("GHMF Playback 2.0 - Rust Edition");
+    info!("Fountain Director v1.0");
     info!("Starting application...");
 
     // Launch GUI
@@ -26,12 +27,12 @@ fn main() -> Result<()> {
         viewport: egui::ViewportBuilder::default()
             .with_inner_size([1290.0, 975.0])
             .with_min_inner_size([800.0, 600.0])
-            .with_title("GHMF Playback 2.0"),
+            .with_title("Fountain Director v1.0"),
         ..Default::default()
     };
 
     let result = eframe::run_native(
-        "GHMF Playback",
+        "Fountain Director",
         native_options,
         Box::new(|cc| Ok(Box::new(gui::PlaybackApp::new(cc)))),
     );

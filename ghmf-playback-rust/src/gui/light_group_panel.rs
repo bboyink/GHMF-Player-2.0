@@ -17,6 +17,26 @@ struct DmxMapConfig {
     mappings: Vec<FixtureMapping>,
 }
 
+// Structure from custom fixtures file
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct DmxFixtureDefinition {
+    id: u8,
+    name: String,
+    #[serde(default)]
+    fixture_type: String,
+    #[serde(default)]
+    light_type: Option<String>,
+    #[serde(default)]
+    channel_count: u8,
+    #[serde(default)]
+    ignore_reset: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct FixtureConfig {
+    custom_fixtures: Vec<DmxFixtureDefinition>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LightGroup {
     pub name: String,
@@ -97,10 +117,12 @@ impl LightGroupPanel {
     
     fn load_fixtures_from_dmx_map() -> Vec<FixtureDefinition> {
         let dmx_map_path = "Config/dmx_mapping.json";
+        let mut fixtures = Vec::new();
         
+        // Load mapped fixtures from dmx_mapping.json
         if let Ok(content) = fs::read_to_string(dmx_map_path) {
             if let Ok(dmx_config) = serde_json::from_str::<DmxMapConfig>(&content) {
-                return dmx_config.mappings.iter().map(|mapping| {
+                fixtures = dmx_config.mappings.iter().map(|mapping| {
                     FixtureDefinition {
                         id: mapping.fixture_id,
                         name: mapping.fixture_name.clone(),
@@ -109,8 +131,26 @@ impl LightGroupPanel {
             }
         }
         
-        // Fallback to empty list if no DMX mappings
-        Vec::new()
+        // Also load custom fixtures from custom_fixtures.json
+        let custom_fixtures_path = "Config/custom_fixtures.json";
+        if let Ok(content) = fs::read_to_string(custom_fixtures_path) {
+            if let Ok(fixture_config) = serde_json::from_str::<FixtureConfig>(&content) {
+                // Add custom fixtures that are not already in the list
+                for custom_fixture in fixture_config.custom_fixtures {
+                    if !fixtures.iter().any(|f| f.id == custom_fixture.id) {
+                        fixtures.push(FixtureDefinition {
+                            id: custom_fixture.id,
+                            name: custom_fixture.name,
+                        });
+                    }
+                }
+            }
+        }
+        
+        // Sort by ID for consistent display
+        fixtures.sort_by_key(|f| f.id);
+        
+        fixtures
     }
     
     fn load_config(path: &str) -> LightGroupConfig {
@@ -227,7 +267,7 @@ impl LightGroupPanel {
         let available_height = ui.available_height() - 100.0;
         
         egui::ScrollArea::vertical()
-            .id_salt("fixture_selection_scroll")
+            .id_source("fixture_selection_scroll")
             .max_height(available_height)
             .show(ui, |ui| {
                 ui.set_max_width(330.0);
@@ -243,6 +283,11 @@ impl LightGroupPanel {
                         theme::AppColors::SUCCESS // Cyan/Green when selected
                     } else {
                         theme::AppColors::SURFACE_LIGHT // Gray when not selected
+                    };
+                    let text_color = if is_selected {
+                        Color32::BLACK // Black text when selected for readability
+                    } else {
+                        theme::AppColors::TEXT_PRIMARY // White text when not selected
                     };
                     
                     ui.push_id(format!("fixture_{}", fixture.id), |ui| {
@@ -263,7 +308,7 @@ impl LightGroupPanel {
                                 egui::Align2::LEFT_CENTER,
                                 &text,
                                 egui::FontId::default(),
-                                theme::AppColors::TEXT_PRIMARY,
+                                text_color,
                             );
                             
                             response
@@ -333,7 +378,7 @@ impl LightGroupPanel {
         }
         
         egui::ScrollArea::vertical()
-            .id_salt("groups_scroll")
+            .id_source("groups_scroll")
             .show(ui, |ui| {
                 let mut groups_to_delete = Vec::new();
                 let groups = self.config.groups.clone();

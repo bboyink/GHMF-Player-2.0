@@ -1,11 +1,12 @@
-use super::{playback_panel, lighting_panel, status_panel, settings_dialog, command_panel, theme, sidebar, dmx_map_panel, light_group_panel, legacy_color_panel, playlist_panel, start_time_panel};
+use super::{playback_panel, lighting_panel, status_panel, settings_dialog, command_panel, theme, sidebar, dmx_map_panel, light_group_panel, legacy_color_panel, playlist_panel, start_time_panel, procedures_panel, operator_panel, lights_layout_panel};
 use crate::audio::AudioPlayer;
-use crate::dmx::{EnttecDmxPro, DmxUniverse};
+use crate::dmx::{EnttecDmxPro, DmxUniverse, SacnOutput, SacnFilterMode};
 use crate::plc::{PlcClient, PlcStatus};
 use crate::config::{Settings, CsvConfig};
 use crate::lighting::FixtureManager;
 use crate::commands::CtlFile;
 use egui::{CentralPanel, TopBottomPanel, SidePanel, Context, Color32, Stroke, Vec2};
+use egui_notify::Toasts;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 use std::path::PathBuf;
@@ -17,6 +18,7 @@ pub struct PlaybackApp {
     // Core systems
     audio_player: Option<Arc<Mutex<AudioPlayer>>>,
     dmx_controller: Option<Arc<Mutex<EnttecDmxPro>>>,
+    sacn_output: Arc<Mutex<SacnOutput>>,
     plc_client: Option<Arc<PlcClient>>,
     fixture_manager: Option<Arc<Mutex<FixtureManager>>>,
     csv_config: Option<Arc<CsvConfig>>,
@@ -71,14 +73,35 @@ pub struct PlaybackApp {
     // Legacy Color Mapper
     legacy_color_panel: legacy_color_panel::LegacyColorPanel,
     
+    // Lights Layout Panel
+    lights_layout_panel: lights_layout_panel::LightsLayoutPanel,
+    
     // Start Time Panel
     start_time_panel: start_time_panel::StartTimePanel,
+    
+    // Procedures Panel
+    procedures_panel: procedures_panel::ProceduresPanel,
     
     // Playlist Panel
     playlist_panel: playlist_panel::PlaylistPanel,
     
+    // Operator Panel
+    operator_panel: operator_panel::OperatorPanel,
+    
+    // Playback Panel State
+    playback_panel_state: playback_panel::PlaybackPanelState,
+    
+    // Toast notifications
+    toasts: Toasts,
+    
     // File dialog result channel
     folder_dialog_rx: Option<std::sync::mpsc::Receiver<(String, String)>>, // (folder_type, path)
+    
+    // Fortune cookie Easter egg
+    fortunes: Vec<String>,
+    show_fortune_dialog: bool,
+    current_fortune: String,
+    cookie_icon: Option<Arc<egui::TextureHandle>>,
 }
 
 
@@ -87,6 +110,7 @@ impl Default for PlaybackApp {
         Self {
             audio_player: None,
             dmx_controller: None,
+            sacn_output: Arc::new(Mutex::new(SacnOutput::new())),
             plc_client: None,
             settings: Settings::load(),
             sidebar: sidebar::Sidebar::default(),
@@ -118,9 +142,18 @@ impl Default for PlaybackApp {
             dmx_map_panel: dmx_map_panel::DmxMapPanel::new(),
             light_group_panel: light_group_panel::LightGroupPanel::new(),
             legacy_color_panel: legacy_color_panel::LegacyColorPanel::default(),
+            lights_layout_panel: lights_layout_panel::LightsLayoutPanel::new(),
             start_time_panel: start_time_panel::StartTimePanel::new(),
+            procedures_panel: procedures_panel::ProceduresPanel::new(),
             playlist_panel: playlist_panel::PlaylistPanel::new(),
+            operator_panel: operator_panel::OperatorPanel::new(),
+            playback_panel_state: playback_panel::PlaybackPanelState::default(),
+            toasts: Toasts::default(),
             folder_dialog_rx: None,
+            fortunes: Vec::new(),
+            show_fortune_dialog: false,
+            current_fortune: String::new(),
+            cookie_icon: None,
         }
     }
 }
@@ -132,11 +165,26 @@ impl PlaybackApp {
         
         let mut app = Self::default();
         
+        // Reload operator panel with correct playlist folder (since Default uses hardcoded path)
+        app.operator_panel.load_pre_show_playlist(&app.settings.playlist_folder);
+        
+        // Set announcements folder from settings
+        app.playback_panel_state.announcements_folder = app.settings.announcements_folder.clone();
+        
         // Initialize systems
         app.initialize_audio();
         app.initialize_dmx();
         app.initialize_plc();
         app.initialize_csv_config();
+        
+        // Load fortune cookies
+        app.load_fortunes();
+        
+        // Load cookie icon
+        app.load_cookie_icon(&cc.egui_ctx);
+        
+        // Load first song from Pre-Show playlist if available
+        app.load_first_pre_show_song();
         
         app
     }
@@ -145,11 +193,9 @@ impl PlaybackApp {
         match AudioPlayer::new() {
             Ok(player) => {
                 self.audio_player = Some(Arc::new(Mutex::new(player)));
-                self.set_status("Audio system initialized", StatusType::Success);
                 info!("Audio system initialized");
             }
             Err(e) => {
-                self.set_status(&format!("Audio init failed: {}", e), StatusType::Error);
                 warn!("Failed to initialize audio: {}", e);
             }
         }
@@ -174,11 +220,9 @@ impl PlaybackApp {
                 self.fixture_manager = Some(Arc::new(Mutex::new(fixture_manager)));
                 self.csv_config = Some(config_arc);
                 
-                self.set_status("Configuration loaded from Config/", StatusType::Success);
                 info!("Loaded CSV configuration from Config/");
             }
             Err(e) => {
-                self.set_status(&format!("Config load failed: {}", e), StatusType::Warning);
                 warn!("Failed to load CSV config: {}", e);
             }
         }
@@ -186,7 +230,6 @@ impl PlaybackApp {
     
     fn initialize_dmx(&mut self) {
         if !self.settings.dmx_enabled {
-            self.set_status("DMX disabled in settings", StatusType::Info);
             return;
         }
         
@@ -194,11 +237,9 @@ impl PlaybackApp {
             Ok(controller) => {
                 self.dmx_controller = Some(Arc::new(Mutex::new(controller)));
                 self.dmx_connected = true;
-                self.set_status("DMX controller connected", StatusType::Success);
                 info!("DMX controller initialized");
             }
             Err(e) => {
-                self.set_status(&format!("DMX init failed: {}", e), StatusType::Warning);
                 warn!("DMX initialization failed: {}", e);
             }
         }
@@ -253,11 +294,83 @@ impl PlaybackApp {
             
             self.plc_client = Some(plc_arc);
             self.plc_status = PlcStatus::Disconnected; // Will update to Connected once connection succeeds
-            self.set_status("PLC client initialized", StatusType::Info);
         } else {
             self.plc_client = Some(Arc::new(plc));
             self.plc_status = PlcStatus::Disabled;
-            self.set_status("PLC disabled in settings", StatusType::Info);
+        }
+    }
+    
+    fn load_fortunes(&mut self) {
+        let fortune_path = std::path::PathBuf::from("Config/fortune-cookies.json");
+        
+        match std::fs::read_to_string(&fortune_path) {
+            Ok(content) => {
+                match serde_json::from_str::<Vec<String>>(&content) {
+                    Ok(fortunes) => {
+                        self.fortunes = fortunes;
+                        info!("Loaded {} fortune cookies", self.fortunes.len());
+                    }
+                    Err(e) => {
+                        warn!("Failed to parse fortunes: {}", e);
+                    }
+                }
+            }
+            Err(e) => {
+                warn!("Failed to load fortunes from {:?}: {}", fortune_path, e);
+            }
+        }
+    }
+    
+    fn load_cookie_icon(&mut self, ctx: &egui::Context) {
+        let icon_path = std::path::PathBuf::from("assets/cookie.png");
+        
+        if let Ok(image) = image::open(&icon_path) {
+            let rgba_image = image.to_rgba8();
+            let size = [rgba_image.width() as usize, rgba_image.height() as usize];
+            let pixels = rgba_image.as_flat_samples();
+            
+            let color_image = egui::ColorImage::from_rgba_unmultiplied(
+                size,
+                pixels.as_slice()
+            );
+            
+            let texture = ctx.load_texture(
+                "cookie_icon",
+                color_image,
+                egui::TextureOptions::default()
+            );
+            
+            self.cookie_icon = Some(Arc::new(texture));
+            info!("Loaded cookie icon");
+        } else {
+            warn!("Failed to load cookie icon from {:?}", icon_path);
+        }
+    }
+    
+    fn show_random_fortune(&mut self) {
+        if self.fortunes.is_empty() {
+            self.current_fortune = "No fortunes available!".to_string();
+        } else {
+            use rand::Rng;
+            let mut rng = rand::thread_rng();
+            let index = rng.gen_range(0..self.fortunes.len());
+            self.current_fortune = self.fortunes[index].clone();
+        }
+        self.show_fortune_dialog = true;
+    }
+    
+    fn load_first_pre_show_song(&mut self) {
+        // Try to get the first song from Pre-Show playlist
+        if let Some(song_path) = self.operator_panel.get_next_song_from_current_playlist() {
+            self.load_song(song_path.clone());
+            self.current_playlist = "Pre-Show".to_string();
+            
+            // Load waveform for the song
+            if let Some(ref song_path) = self.current_song_path {
+                self.playback_panel_state.load_waveform(song_path);
+            }
+            
+            // Don't auto-play on startup - user needs to press play
         }
     }
     
@@ -265,24 +378,172 @@ impl PlaybackApp {
         self.status_message = message.to_string();
         self.status_type = status_type;
         self.status_time = Instant::now();
+        
+        // Also show toast notification
+        match status_type {
+            StatusType::Success => {
+                self.toasts.success(message);
+            }
+            StatusType::Error => {
+                self.toasts.error(message);
+            }
+            StatusType::Warning => {
+                self.toasts.warning(message);
+            }
+            StatusType::Info => {
+                self.toasts.info(message);
+            }
+        }
     }
     
     fn update_playback_state(&mut self) {
-        let should_execute_commands = if let Some(player) = &self.audio_player {
+        // Check if announcement finished and needs to resume playlist
+        if self.playback_panel_state.playing_announcement {
+            if let Some(player) = &self.audio_player {
+                if let Ok(player) = player.lock() {
+                    // Check if announcement finished (player is idle/stopped)
+                    if player.is_finished() {
+                        // Announcement finished - reload the playlist song and resume
+                        self.playback_panel_state.playing_announcement = false;
+                        self.playback_panel_state.announcement_path = None;
+                        
+                        // Restore saved waveform from before announcement
+                        if let Some(saved_waveform) = self.playback_panel_state.saved_waveform.take() {
+                            self.playback_panel_state.waveform_data = Some(saved_waveform.clone());
+                            
+                            // Recreate scrolling buffer from saved waveform
+                            let duration = saved_waveform.duration_secs;
+                            let builder = crate::audio::BufferBuilder::from_waveform(saved_waveform.samples.clone(), duration);
+                            let buffer = builder.build(7.0);
+                            self.playback_panel_state.scrolling_buffer = Some(buffer);
+                        }
+                        
+                        // Reload the saved song and seek to saved position
+                        if let Some(ref song_path) = self.playback_panel_state.saved_song_path {
+                            let path_str = song_path.to_string_lossy();
+                            if let Ok(_) = player.play(&path_str) {
+                                // Seek to saved position
+                                let saved_pos = self.playback_panel_state.saved_position;
+                                if saved_pos > Duration::from_secs(0) {
+                                    let _ = player.seek(saved_pos);
+                                }
+                                
+                                // Resume if we were paused for announcement
+                                if self.playback_panel_state.paused_for_announcement {
+                                    player.resume();
+                                    self.playback_panel_state.paused_for_announcement = false;
+                                    self.is_paused = false;
+                                }
+                            }
+                        }
+                        
+                        // Clear saved state
+                        self.playback_panel_state.saved_position = Duration::from_secs(0);
+                        self.playback_panel_state.saved_song_path = None;
+                    }
+                }
+            }
+        }
+        
+        let (should_execute_commands, song_finished) = if let Some(player) = &self.audio_player {
             if let Ok(player) = player.lock() {
+                let was_playing = self.is_playing;
+                let was_paused = self.is_paused;
                 self.is_playing = player.is_playing();
                 self.is_paused = player.is_paused();
                 self.playback_position = player.get_position();
-                self.master_volume = player.get_volume();
+                self.master_volume = player.get_left_volume();
+                self.playback_panel_state.left_volume = player.get_left_volume();
+                
+                // Don't check for song finished if we're playing an announcement
+                let finished = if self.playback_panel_state.playing_announcement {
+                    false
+                } else {
+                    // Check if song finished by comparing position to waveform duration
+                    let song_duration = if let Some(ref wf) = self.playback_panel_state.waveform_data {
+                        Duration::from_secs_f32(wf.duration_secs)
+                    } else {
+                        Duration::from_secs(999999) // No waveform = treat as very long
+                    };
+                    
+                    // Song finished if: was playing AND NOT currently paused AND reached the end
+                    // Use a small buffer (0.5s) to detect near the end reliably
+                    let near_end = song_duration.saturating_sub(Duration::from_millis(500));
+                    was_playing && !self.is_paused && 
+                        self.playback_position >= near_end && 
+                        self.playback_position < song_duration + Duration::from_secs(2) // Prevent infinite detection
+                };
                 
                 // Check if we should execute commands
-                self.is_playing && !self.is_paused
+                (self.is_playing && !self.is_paused, finished)
             } else {
-                false
+                (false, false)
             }
         } else {
-            false
+            (false, false)
         };
+        
+        // Handle song finished outside the player lock to avoid borrow issues
+        if song_finished {
+            if let Some(song_path) = self.operator_panel.get_next_song_from_current_playlist() {
+                self.load_song(song_path.clone());
+                // Only load waveform if the song loaded successfully
+                if self.current_song_path.is_some() && self.audio_player.is_some() {
+                    if let Some(ref song_path) = self.current_song_path {
+                        self.playback_panel_state.load_waveform(song_path);
+                    }
+                    // Auto-play the next song (unless it's Opening)
+                    let is_opening = self.current_song.to_lowercase().contains("opening");
+                    if !is_opening {
+                        if let Some(player) = &self.audio_player {
+                            if let Ok(player) = player.lock() {
+                                player.resume();
+                            }
+                        }
+                    }
+                }
+            } else {
+                // No more songs - check if this was Pre-Show
+                if self.operator_panel.current_playlist_type.as_deref() == Some("Pre-Show") {
+                    // Pre-Show is complete - always load today's main playlist (never Testing)
+                    self.operator_panel.load_todays_playlist(&self.settings.playlist_folder);
+                    
+                    // Reset dropdown to Playlist selection
+                    self.operator_panel.selected_playlist_index = 1; // Index 1 = "Playlist"
+                    
+                    // Get first song from today's playlist
+                    if let Some(song_path) = self.operator_panel.get_next_song_from_current_playlist() {
+                        self.load_song(song_path.clone());
+                        self.current_playlist = "Playlist".to_string();
+                        
+                        // Load waveform for the new song
+                        if let Some(ref song_path) = self.current_song_path {
+                            self.playback_panel_state.load_waveform(song_path);
+                        }
+                        
+                        // Auto-play when transitioning from Pre-Show to main playlist
+                        if let Some(player) = &self.audio_player {
+                            if let Ok(player) = player.lock() {
+                                player.resume();
+                            }
+                        }
+                    }
+                } else {
+                    // Regular playlist is complete - show "Show Completed"
+                    if let Some(player) = &self.audio_player {
+                        if let Ok(player) = player.lock() {
+                            player.stop();
+                        }
+                    }
+                    self.current_song = "Show Completed".to_string();
+                    self.is_playing = false;
+                    self.is_paused = false;
+                    self.playback_position = Duration::from_secs(0);
+                    self.playback_duration = Duration::from_secs(0);
+                    self.playback_panel_state.clear_waveform();
+                }
+            }
+        }
         
         // Execute commands if playing (after releasing player lock)
         if should_execute_commands {
@@ -301,12 +562,49 @@ impl PlaybackApp {
     
     fn update_dmx_state(&mut self) {
         if self.dmx_last_update.elapsed() > Duration::from_millis(50) {
+            // Update fades first
+            if let Some(fm) = &self.fixture_manager {
+                fm.lock().unwrap().update_fades();
+            }
+            
+            // Send updated DMX with interpolated fade values
             if let Some(dmx) = &self.dmx_controller {
-                if let Ok(mut dmx) = dmx.lock() {
-                    let _ = dmx.send_dmx();
-                    self.dmx_last_update = Instant::now();
+                if let Some(fm) = &self.fixture_manager {
+                    let mut universe = DmxUniverse::new();
+                    let fm_lock = fm.lock().unwrap();
+                    
+                    if let Err(e) = fm_lock.apply_to_dmx(&mut universe) {
+                        warn!("Failed to apply to DMX during update: {}", e);
+                    } else {
+                        drop(fm_lock);
+                        
+                        if let Ok(mut dmx) = dmx.lock() {
+                            // Copy universe data to DMX controller
+                            for (i, val) in universe.as_slice().iter().enumerate() {
+                                if let Err(e) = dmx.set_channel(i + 1, *val) {
+                                    warn!("Failed to set DMX channel {} during update: {}", i + 1, e);
+                                    break;
+                                }
+                            }
+                            
+                            let _ = dmx.send_dmx();
+                        }
+                        
+                        // Send via sACN if enabled
+                        if let Ok(mut sacn) = self.sacn_output.lock() {
+                            if sacn.is_active() {
+                                // For 900 codes only mode, we need fixture IDs >= 900
+                                let fixture_900_ids: Vec<usize> = Vec::new(); // Will be populated from fixture manager
+                                if let Err(e) = sacn.send_dmx(&universe, &fixture_900_ids) {
+                                    warn!("Failed to send sACN data: {}", e);
+                                }
+                            }
+                        }
+                    }
                 }
             }
+            
+            self.dmx_last_update = Instant::now();
         }
     }
     
@@ -346,6 +644,59 @@ impl PlaybackApp {
         }
     }
     
+    /// Update sACN output state based on settings
+    fn update_sacn_state(&mut self) {
+        // Clone settings values to avoid borrow checker issues
+        let sacn_enabled = self.settings.sacn_enabled;
+        let sacn_interface_ip = self.settings.sacn_interface_ip.clone();
+        let sacn_filter_mode = self.settings.sacn_filter_mode.clone();
+        
+        // Track status updates to apply after releasing lock
+        let mut status_message: Option<(String, StatusType)> = None;
+        
+        if let Ok(mut sacn) = self.sacn_output.lock() {
+            // Check if sACN should be enabled
+            if sacn_enabled && !sacn_interface_ip.is_empty() {
+                // Start sACN if not already active
+                if !sacn.is_active() {
+                    match sacn.start(&sacn_interface_ip) {
+                        Ok(_) => {
+                            info!("sACN output started on {}", sacn_interface_ip);
+                            status_message = Some(("sACN output enabled".to_string(), StatusType::Success));
+                        }
+                        Err(e) => {
+                            warn!("Failed to start sACN: {}", e);
+                            status_message = Some((format!("Failed to start sACN: {}", e), StatusType::Warning));
+                        }
+                    }
+                }
+                
+                // Update filter mode
+                let filter_mode = if sacn_filter_mode == "900only" {
+                    SacnFilterMode::Code900Only
+                } else {
+                    SacnFilterMode::AllLights
+                };
+                
+                if sacn.get_filter_mode() != filter_mode {
+                    sacn.set_filter_mode(filter_mode);
+                }
+            } else {
+                // Stop sACN if active
+                if sacn.is_active() {
+                    sacn.stop();
+                    info!("sACN output stopped");
+                    status_message = Some(("sACN output disabled".to_string(), StatusType::Info));
+                }
+            }
+        } // Lock is released here
+        
+        // Now update status if needed
+        if let Some((message, status_type)) = status_message {
+            self.set_status(&message, status_type);
+        }
+    }
+    
     fn open_song_dialog(&mut self) {
         // Spawn file dialog in background to avoid blocking UI
         if let Some(path) = rfd::FileDialog::new()
@@ -357,7 +708,27 @@ impl PlaybackApp {
         }
     }
     
+    /// Reset all fixtures and send 099-000 to PLC
+    fn reset_lighting_system(&mut self) {
+        tracing::info!("Resetting lighting system: sending 099-000 and resetting all fixtures");
+        
+        // Send 099-000 to PLC
+        if let Some(plc) = &self.plc_client {
+            plc.queue_command_sync("099-000".to_string());
+        }
+        
+        // Reset all fixtures to black
+        if let Some(fixture_manager) = &self.fixture_manager {
+            if let Ok(mut fm) = fixture_manager.lock() {
+                fm.reset_all();
+            }
+        }
+    }
+    
     fn load_song(&mut self, song_path: PathBuf) {
+        // Reset lighting system when loading a new song
+        self.reset_lighting_system();
+        
         // Check for corresponding .ctl file
         let ctl_path = song_path.with_extension("ctl");
         
@@ -388,7 +759,7 @@ impl PlaybackApp {
             .to_string();
         self.current_song_path = Some(song_path.clone());
         
-        // Load audio file into player
+        // Load audio file into player (but pause immediately - don't auto-play)
         let mut audio_loaded = false;
         let mut audio_error = None;
         
@@ -397,11 +768,12 @@ impl PlaybackApp {
                 let path_str = song_path.to_string_lossy();
                 match player.play(&path_str) {
                     Ok(_) => {
-                        info!("Audio loaded and playing: {}", path_str);
+                        // Audio player now starts paused by default
+                        info!("Audio loaded (paused, ready to play): {}", path_str);
                         audio_loaded = true;
                     }
                     Err(e) => {
-                        warn!("Failed to play audio: {}", e);
+                        warn!("Failed to load audio: {}", e);
                         audio_error = Some(format!("Audio error: {}", e));
                     }
                 }
@@ -409,14 +781,11 @@ impl PlaybackApp {
         }
         
         if audio_loaded {
-            self.is_playing = true;
-            self.is_paused = false;
+            self.is_playing = false;
+            self.is_paused = true; // Start paused
+            self.playback_position = Duration::from_secs(0); // Reset position
             self.last_command_time = 0;
             self.recent_commands.clear();
-            self.set_status(
-                &format!("Loaded: {}", self.current_song),
-                StatusType::Success
-            );
         } else if let Some(err_msg) = audio_error {
             self.set_status(&err_msg, StatusType::Warning);
         } else {
@@ -445,8 +814,13 @@ impl PlaybackApp {
             return;
         }
         
-        // Execute each command
-        for cmd in &commands {
+        // Collect command descriptions for logging (only lighting commands)
+        let mut cmd_descriptions = Vec::new();
+        
+        // Execute each command - handle fades specially
+        let mut i = 0;
+        while i < commands.len() {
+            let cmd = &commands[i];
             let mut fm = fixture_manager.lock().unwrap();
             
             // Format as raw CTL format: "XXX-YYY" 
@@ -467,15 +841,97 @@ impl PlaybackApp {
             }
             
             // Add to recent commands (keep last 100 for better history)
-            self.recent_commands.push((time_ms, cmd_desc));
+            self.recent_commands.push((time_ms, cmd_desc.clone()));
             if self.recent_commands.len() > 100 {
                 self.recent_commands.remove(0);
             }
             
+            // Only collect lighting commands for file logging (skip water/PLC commands)
+            if !is_water {
+                cmd_descriptions.push(cmd_desc.clone());
+            }
+            
+            // Check if this is a fade command
+            let is_fade_command = Self::is_fade_command(cmd.fcw_address);
+            
+            if is_fade_command && i + 1 < commands.len() {
+                // This is a fade command - next command contains the target color
+                let fade_duration_ms = cmd.data as u64 * 100; // data is in tenths of seconds
+                let target_cmd = &commands[i + 1];
+                
+                // Get the base address
+                // 100-199 fades regular FCW addresses (100 -> 0, 117 -> 17, etc.)
+                // 600-699 fades individual fixtures in 500-series (604 -> 504, 617 -> 517, etc.)
+                let base_address = cmd.fcw_address - 100;
+                
+                // Format target command for logging
+                let target_cmd_desc = if target_cmd.is_hex_color {
+                    format!("{:03}-{}", target_cmd.fcw_address, target_cmd.hex_color.as_ref().unwrap_or(&"???".to_string()))
+                } else {
+                    format!("{:03}-{:03}", target_cmd.fcw_address, target_cmd.data)
+                };
+                
+                // Add target command to recent commands
+                self.recent_commands.push((time_ms, target_cmd_desc.clone()));
+                if self.recent_commands.len() > 100 {
+                    self.recent_commands.remove(0);
+                }
+                
+                // Only add to file log if not a water command
+                if !is_water {
+                    cmd_descriptions.push(target_cmd_desc);
+                }
+                
+                // Execute the fade based on target command type
+                let result = if target_cmd.is_hex_color {
+                    if let Some(hex) = &target_cmd.hex_color {
+                        // Parse hex color for fade
+                        let hex_clean = hex.trim_start_matches('#');
+                        if hex_clean.len() == 6 {
+                            if let (Ok(r), Ok(g), Ok(b)) = (
+                                u8::from_str_radix(&hex_clean[0..2], 16),
+                                u8::from_str_radix(&hex_clean[2..4], 16),
+                                u8::from_str_radix(&hex_clean[4..6], 16),
+                            ) {
+                                fm.start_fade(base_address, r, g, b, fade_duration_ms)
+                            } else {
+                                Err(anyhow::anyhow!("Invalid hex color"))
+                            }
+                        } else {
+                            Err(anyhow::anyhow!("Invalid hex color length"))
+                        }
+                    } else {
+                        Err(anyhow::anyhow!("Missing hex color"))
+                    }
+                } else {
+                    // Regular color index fade
+                    // Get color from color map
+                    if let Some(color) = fm.config.get_color(target_cmd.data) {
+                        if let Ok((r, g, b)) = color.to_rgb() {
+                            fm.start_fade(base_address, r, g, b, fade_duration_ms)
+                        } else {
+                            Err(anyhow::anyhow!("Color conversion failed"))
+                        }
+                    } else {
+                        Err(anyhow::anyhow!("Color not found"))
+                    }
+                };
+                
+                if let Err(e) = result {
+                    warn!("Fade command execution error: {}", e);
+                }
+                
+                // Skip the next command since we consumed it as the fade target
+                i += 2;
+                continue;
+            }
+            
+            // Regular (non-fade) command execution
             let result = if cmd.is_hex_color {
                 if let Some(hex) = &cmd.hex_color {
                     fm.execute_hex_command(cmd.fcw_address, hex)
                 } else {
+                    i += 1;
                     continue;
                 }
             } else {
@@ -485,6 +941,32 @@ impl PlaybackApp {
             if let Err(e) = result {
                 warn!("Command execution error: {}", e);
             }
+            
+            i += 1;
+        }
+        
+        // Update active fades
+        if let Some(fm) = &self.fixture_manager {
+            fm.lock().unwrap().update_fades();
+        }
+        
+        // Log all commands for this timestamp as one line in MM:SS.T format
+        if !cmd_descriptions.is_empty() {
+            let total_seconds = (time_ms as f64) / 1000.0;
+            let minutes = (total_seconds / 60.0).floor() as u64;
+            let seconds = (total_seconds % 60.0).floor() as u64;
+            let tenths = ((total_seconds % 1.0) * 10.0).floor() as u64;
+            
+            let time_str = format!("{:02}:{:02}.{}", minutes, seconds, tenths);
+            let commands_str = cmd_descriptions.join(", ");
+            let log_entry = format!("{} > {}\n", time_str, commands_str);
+            
+            let log_path = std::path::Path::new("Lights_CTL_Output.txt");
+            let _ = std::fs::OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open(log_path)
+                .and_then(|mut f| std::io::Write::write_all(&mut f, log_entry.as_bytes()));
         }
         
         // Send to DMX if controller is available
@@ -517,16 +999,169 @@ impl PlaybackApp {
         // PLC sending is handled by background thread - commands are already queued
     }
     
-    /// Check if FCW address is a water command
+    /// Check if FCW address is a water command (based on light_groups.json water directives)
     fn is_water_command(fcw_address: u16) -> bool {
-        (fcw_address >= 1 && fcw_address <= 13) ||
-        (fcw_address >= 217 && fcw_address <= 255) ||
-        (fcw_address >= 700 && fcw_address <= 896)
+        match fcw_address {
+            1..=13 | 33..=40 | 47..=48 | 87..=91 | 99 | 217..=223 | 249..=255 | 700..=749 => true,
+            _ => false,
+        }
+    }
+    
+    fn is_fade_command(fcw_address: u16) -> bool {
+        // Fade commands are base address + 100 (e.g., 17->117, 18->118)
+        // Or hex color fades are 600 series (e.g., 507->607)
+        match fcw_address {
+            100..=199 | 600..=699 => true,
+            _ => false,
+        }
     }
     
     // View rendering methods
     fn show_operator_view(&mut self, ctx: &Context, ui: &mut egui::Ui) {
-        // Operator mode - Main playback interface
+        // Operator mode - New comprehensive operator interface
+        
+        // Update operator panel with procedures data and show start time
+        let procedures = self.procedures_panel.get_procedures();
+        let show_start_time = self.start_time_panel.get_today_start_time();
+        self.operator_panel.update_procedures(&procedures, &show_start_time);
+        
+        // Sync playback state for playlist highlighting
+        self.operator_panel.playback.is_playing = self.is_playing && !self.is_paused;
+        self.operator_panel.playback.current_position = self.playback_position;
+        
+        let (selected_playlist_type, clicked_song_index, step_clicked) = self.operator_panel.show(
+            ctx, 
+            ui, 
+            &mut self.is_playing, 
+            &mut self.is_paused,
+            self.playback_position,
+            self.playback_duration,
+            &self.current_song,
+            &self.current_playlist,
+            &self.audio_player,
+            &mut self.playback_panel_state,
+            &self.current_song_path,
+            &self.recent_commands,
+            self.fixture_manager.as_ref(),
+        );
+        
+        // Handle step button click (temporary feature for CTL debugging)
+        if step_clicked && self.is_paused {
+            let current_time_ms = self.playback_position.as_millis() as u64;
+            
+            // Find the next timestamp after current position (copy needed data to avoid borrow issues)
+            let next_step = self.current_ctl_file.as_ref().and_then(|ctl_file| {
+                ctl_file.lines.iter()
+                    .find(|line| line.time_ms > current_time_ms)
+                    .map(|line| (line.time_ms, line.commands.len()))
+            });
+            
+            if let Some((next_time_ms, command_count)) = next_step {
+                // Execute commands at that timestamp
+                self.execute_commands_at_time(next_time_ms);
+                
+                // Update playback position to the next timestamp
+                self.playback_position = Duration::from_millis(next_time_ms);
+                self.last_command_time = next_time_ms;
+                
+                // Sync audio player position for accurate time display
+                if let Some(player) = &self.audio_player {
+                    if let Ok(player) = player.lock() {
+                        let _ = player.seek(self.playback_position);
+                    }
+                }
+                
+                info!("Step: Advanced to {}ms, executed {} commands", 
+                    next_time_ms, command_count);
+            } else {
+                info!("Step: No more commands in CTL file");
+            }
+        }
+        
+        // If user clicked a song in the playlist, jump to that song
+        if let Some(song_index) = clicked_song_index {
+            if let Some(song_path) = self.operator_panel.jump_to_song(song_index) {
+                // Send 099-000 to PLC when manually selecting a song
+                if let Some(ref plc) = self.plc_client {
+                    plc.queue_command_sync("099-000\r\n".to_string());
+                    info!("Sent 099-000 to PLC for manual song selection");
+                }
+                
+                self.load_song(song_path.clone());
+                self.current_playlist = "Production".to_string(); // Or track the actual playlist type
+                
+                // Load waveform for the new song
+                if let Some(ref song_path) = self.current_song_path {
+                    self.playback_panel_state.load_waveform(song_path);
+                }
+                
+                // Auto-play the jumped-to song (unless it's Opening)
+                let is_opening = self.current_song.to_lowercase().contains("opening");
+                if !is_opening {
+                    if let Some(player) = &self.audio_player {
+                        if let Ok(player) = player.lock() {
+                            player.resume();
+                        }
+                    }
+                }
+            }
+        }
+        
+        // If user selected a new playlist type, load the playlist and first song
+        if let Some(playlist_type) = selected_playlist_type {
+            // Reset lighting system when starting a new playlist
+            self.reset_lighting_system();
+            
+            // Load the appropriate playlist based on type
+            // Note: load_pre_show_playlist and load_todays_playlist do file I/O
+            // but are necessary to populate the playlist display
+            match playlist_type.as_str() {
+                "Pre-Show" => {
+                    self.operator_panel.load_pre_show_playlist(&self.settings.playlist_folder);
+                    // Load first song from Pre-Show
+                    if let Some(song_path) = self.operator_panel.get_next_song_from_current_playlist() {
+                        self.load_song(song_path);
+                        self.current_playlist = playlist_type;
+                        
+                        // Load waveform for the new song
+                        if let Some(ref song_path) = self.current_song_path {
+                            self.playback_panel_state.load_waveform(song_path);
+                        }
+                    }
+                }
+                "Playlist" => {
+                    self.operator_panel.load_todays_playlist(&self.settings.playlist_folder);
+                    // Load first song from today's playlist
+                    if let Some(song_path) = self.operator_panel.get_next_song_from_current_playlist() {
+                        self.load_song(song_path);
+                        self.current_playlist = playlist_type;
+                        
+                        // Load waveform for the new song
+                        if let Some(ref song_path) = self.current_song_path {
+                            self.playback_panel_state.load_waveform(song_path);
+                        }
+                    }
+                }
+                "Testing" => {
+                    self.operator_panel.load_testing_playlist(&self.settings.playlist_folder);
+                    // Load first song from Testing playlist
+                    if let Some(song_path) = self.operator_panel.get_next_song_from_current_playlist() {
+                        self.load_song(song_path);
+                        self.current_playlist = playlist_type;
+                        
+                        // Load waveform for the new song
+                        if let Some(ref song_path) = self.current_song_path {
+                            self.playback_panel_state.load_waveform(song_path);
+                        }
+                    }
+                }
+                _ => {} // Other types handled separately
+            }
+        }
+    }
+    
+    fn show_operator_view_old(&mut self, ctx: &Context, ui: &mut egui::Ui) {
+        // OLD Operator mode - Main playback interface
         
         // Command output panel (left side)
         SidePanel::left("command_panel_operator")
@@ -547,12 +1182,14 @@ impl PlaybackApp {
                 ui,
                 &mut self.is_playing,
                 &mut self.is_paused,
-                &mut self.master_volume,
                 self.playback_position,
                 self.playback_duration,
                 &self.current_song,
                 &self.current_playlist,
                 &self.audio_player,
+                &mut self.playback_panel_state,
+                &self.current_song_path,
+                &self.recent_commands,
             );
             
             // File operations section
@@ -710,7 +1347,13 @@ impl PlaybackApp {
                     let mut cleared = false;
                     if let Some(dmx) = &self.dmx_controller {
                         if let Ok(mut dmx) = dmx.lock() {
-                            dmx.clear();
+                            // Get channels that should be ignored during reset
+                            let ignore_channels = self.dmx_map_panel.get_ignore_reset_channels();
+                            if ignore_channels.is_empty() {
+                                dmx.clear();
+                            } else {
+                                dmx.clear_except(&ignore_channels);
+                            }
                             let _ = dmx.send_dmx();
                             cleared = true;
                         }
@@ -732,9 +1375,9 @@ impl PlaybackApp {
                 &self.settings.production_folder,
                 &self.settings.testing_folder,
                 &self.settings.events_folder,
-                &self.settings.drone_folder,
-                &self.settings.open_close_folder,
-                &self.settings.playlist_folder
+                &self.settings.pre_show_folder,
+                &self.settings.playlist_folder,
+                &self.settings.open_close_folder
             );
             
             ui.add_space(20.0);
@@ -825,6 +1468,114 @@ impl PlaybackApp {
             
             ui.add_space(20.0);
             
+            // sACN / E.131 Settings Card
+            egui::Frame::none()
+                .fill(theme::AppColors::SURFACE)
+                .stroke(Stroke::new(1.0, theme::AppColors::SURFACE_LIGHT))
+                .rounding(12.0)
+                .inner_margin(24.0)
+                .show(ui, |ui| {
+                    ui.label(
+                        egui::RichText::new("E.131 sACN Output")
+                            .size(20.0)
+                            .strong()
+                            .color(theme::AppColors::CYAN)
+                    );
+                    ui.add_space(10.0);
+                    ui.add(egui::Separator::default().spacing(0.0));
+                    ui.add_space(15.0);
+                    
+                    ui.checkbox(&mut self.settings.sacn_enabled, 
+                        egui::RichText::new("Enable sACN output")
+                            .size(14.0)
+                            .color(Color32::WHITE)
+                    );
+                    ui.add_space(8.0);
+                    ui.label(
+                        egui::RichText::new("Stream DMX data over Ethernet using E.131 protocol")
+                            .size(13.0)
+                            .color(theme::AppColors::TEXT_SECONDARY)
+                    );
+                    
+                    if self.settings.sacn_enabled {
+                        ui.add_space(20.0);
+                        
+                        // Network Interface Selection
+                        ui.label(
+                            egui::RichText::new("Network Interface:")
+                                .size(14.0)
+                                .color(Color32::WHITE)
+                        );
+                        ui.add_space(5.0);
+                        
+                        let interfaces = crate::dmx::get_network_interfaces();
+                        egui::ComboBox::from_id_salt("sacn_interface")
+                            .selected_text(if self.settings.sacn_interface_ip.is_empty() {
+                                "Select interface..."
+                            } else {
+                                &self.settings.sacn_interface_ip
+                            })
+                            .width(300.0)
+                            .show_ui(ui, |ui| {
+                                for (name, ip) in interfaces {
+                                    let label = format!("{} ({})", name, ip);
+                                    ui.selectable_value(&mut self.settings.sacn_interface_ip, ip, label);
+                                }
+                            });
+                        
+                        ui.add_space(15.0);
+                        
+                        // Filter Mode Selection
+                        ui.label(
+                            egui::RichText::new("Output Mode:")
+                                .size(14.0)
+                                .color(Color32::WHITE)
+                        );
+                        ui.add_space(5.0);
+                        
+                        egui::ComboBox::from_id_salt("sacn_filter_mode")
+                            .selected_text(if self.settings.sacn_filter_mode == "900only" {
+                                "900 Codes Only"
+                            } else {
+                                "All Lights"
+                            })
+                            .width(300.0)
+                            .show_ui(ui, |ui| {
+                                ui.selectable_value(&mut self.settings.sacn_filter_mode, "all".to_string(), "All Lights");
+                                ui.selectable_value(&mut self.settings.sacn_filter_mode, "900only".to_string(), "900 Codes Only");
+                            });
+                        
+                        ui.add_space(8.0);
+                        ui.label(
+                            egui::RichText::new(if self.settings.sacn_filter_mode == "900only" {
+                                "Sends only channels 500-512 (fixture IDs ≥900)"
+                            } else {
+                                "Sends all 512 DMX channels"
+                            })
+                                .size(12.0)
+                                .color(theme::AppColors::TEXT_DISABLED)
+                        );
+                        
+                        ui.add_space(15.0);
+                        ui.label(
+                            egui::RichText::new("Universe 1 • Priority 100")
+                                .size(12.0)
+                                .color(theme::AppColors::TEXT_DISABLED)
+                        );
+                        
+                        if self.settings.sacn_interface_ip.is_empty() {
+                            ui.add_space(8.0);
+                            ui.label(
+                                egui::RichText::new("⚠ Select a network interface to enable output")
+                                    .size(13.0)
+                                    .color(theme::AppColors::WARNING)
+                            );
+                        }
+                    }
+                });
+            
+            ui.add_space(20.0);
+            
             // PLC Settings Card
             egui::Frame::none()
                 .fill(theme::AppColors::SURFACE)
@@ -890,11 +1641,28 @@ impl PlaybackApp {
                     .rounding(8.0);
                     
                     if ui.add(test_button).clicked() {
+                        // 099-000 is a reset command that turns off both water and lights
                         if let Some(plc) = &self.plc_client {
                             plc.queue_command_sync("099-000".to_string());
-                            self.set_status("Test command 099-000 sent to PLC", StatusType::Info);
+                            
+                            // Add to recent commands so it shows up in PLC output
+                            let time_ms = self.playback_position.as_millis() as u64;
+                            self.recent_commands.push((time_ms, "099-000".to_string()));
+                            if self.recent_commands.len() > 100 {
+                                self.recent_commands.remove(0);
+                            }
+                            
+                            self.set_status("Reset command 099-000 sent to PLC", StatusType::Info);
                         } else {
                             self.set_status("PLC not initialized", StatusType::Warning);
+                        }
+                        
+                        // Turn off all lights (send #000000 to all fixtures)
+                        if let Some(dmx) = &self.dmx_controller {
+                            if let Ok(mut dmx) = dmx.lock() {
+                                dmx.clear();
+                                let _ = dmx.send_dmx();
+                            }
                         }
                     }
                 });
@@ -1096,9 +1864,109 @@ impl PlaybackApp {
                             });
                         }
                     });
+                    ui.add_space(15.0);
+                    
+                    ui.label(
+                        egui::RichText::new("Pre-Show Folder:")
+                            .size(14.0)
+                            .color(Color32::WHITE)
+                    );
+                    ui.add_space(5.0);
+                    ui.horizontal(|ui| {
+                        ui.add_sized([300.0, 24.0], 
+                            egui::TextEdit::singleline(&mut self.settings.pre_show_folder));
+                        let folder_btn = egui::Button::new(egui::RichText::new("📁").size(16.0))
+                            .min_size(egui::Vec2::new(24.0, 24.0))
+                            .frame(false)
+                            .fill(Color32::TRANSPARENT);
+                        if ui.add(folder_btn).clicked() {
+                            let current_dir = self.settings.pre_show_folder.clone();
+                            let (tx, rx) = std::sync::mpsc::channel();
+                            self.folder_dialog_rx = Some(rx);
+                            let ctx = ui.ctx().clone();
+                            std::thread::spawn(move || {
+                                if let Some(path) = rfd::FileDialog::new()
+                                    .set_directory(&current_dir)
+                                    .pick_folder() {
+                                    let _ = tx.send(("pre_show".to_string(), path.display().to_string()));
+                                    ctx.request_repaint();
+                                }
+                            });
+                        }
+                    });
+                    ui.add_space(15.0);
+                    
+                    ui.label(
+                        egui::RichText::new("Announcements Folder:")
+                            .size(14.0)
+                            .color(Color32::WHITE)
+                    );
+                    ui.add_space(5.0);
+                    ui.horizontal(|ui| {
+                        ui.add_sized([300.0, 24.0], 
+                            egui::TextEdit::singleline(&mut self.settings.announcements_folder));
+                        let folder_btn = egui::Button::new(egui::RichText::new("📁").size(16.0))
+                            .min_size(egui::Vec2::new(24.0, 24.0))
+                            .frame(false)
+                            .fill(Color32::TRANSPARENT);
+                        if ui.add(folder_btn).clicked() {
+                            let current_dir = self.settings.announcements_folder.clone();
+                            let (tx, rx) = std::sync::mpsc::channel();
+                            self.folder_dialog_rx = Some(rx);
+                            let ctx = ui.ctx().clone();
+                            std::thread::spawn(move || {
+                                if let Some(path) = rfd::FileDialog::new()
+                                    .set_directory(&current_dir)
+                                    .pick_folder() {
+                                    let _ = tx.send(("announcements".to_string(), path.display().to_string()));
+                                    ctx.request_repaint();
+                                }
+                            });
+                        }
+                    });
                     ui.add_space(8.0);
                     ui.label(
                         egui::RichText::new("Paths for show files and configurations")
+                            .size(13.0)
+                            .color(theme::AppColors::TEXT_SECONDARY)
+                    );
+                });
+            
+            ui.add_space(20.0);
+            
+            // Drone Settings Card
+            egui::Frame::none()
+                .fill(theme::AppColors::SURFACE)
+                .stroke(Stroke::new(1.0, theme::AppColors::SURFACE_LIGHT))
+                .rounding(12.0)
+                .inner_margin(24.0)
+                .show(ui, |ui| {
+                    ui.label(
+                        egui::RichText::new("Drone Settings")
+                            .size(20.0)
+                            .strong()
+                            .color(theme::AppColors::CYAN)
+                    );
+                    ui.add_space(10.0);
+                    ui.add(egui::Separator::default().spacing(0.0));
+                    ui.add_space(15.0);
+                    
+                    ui.label(
+                        egui::RichText::new("Battery Warning (Songs Before Message):")
+                            .size(14.0)
+                            .color(Color32::WHITE)
+                    );
+                    ui.add_space(5.0);
+                    let mut warning_songs_str = self.settings.drone_battery_warning_songs.to_string();
+                    if ui.add_sized([120.0, 24.0], 
+                        egui::TextEdit::singleline(&mut warning_songs_str)).changed() {
+                        if let Ok(songs) = warning_songs_str.parse::<u32>() {
+                            self.settings.drone_battery_warning_songs = songs;
+                        }
+                    }
+                    ui.add_space(8.0);
+                    ui.label(
+                        egui::RichText::new("Number of songs before battery swap message appears")
                             .size(13.0)
                             .color(theme::AppColors::TEXT_SECONDARY)
                     );
@@ -1170,7 +2038,18 @@ impl eframe::App for PlaybackApp {
                     "drone" => self.settings.drone_folder = path,
                     "open_close" => self.settings.open_close_folder = path,
                     "playlist" => self.settings.playlist_folder = path,
+                    "pre_show" => self.settings.pre_show_folder = path,
+                    "announcements" => {
+                        self.settings.announcements_folder = path.clone();
+                        self.playback_panel_state.announcements_folder = path;
+                    }
                     _ => {}
+                }
+                // Auto-save settings when folder path changes
+                if let Err(e) = self.settings.save() {
+                    self.set_status(&format!("Failed to save settings: {}", e), StatusType::Warning);
+                } else {
+                    self.set_status("Folder path updated and saved", StatusType::Success);
                 }
                 self.folder_dialog_rx = None;
             }
@@ -1180,6 +2059,7 @@ impl eframe::App for PlaybackApp {
         self.update_playback_state();
         self.update_dmx_state();
         self.update_plc_status();
+        self.update_sacn_state();
         
         // Bottom status bar with dark background
         TopBottomPanel::bottom("status_bar")
@@ -1187,6 +2067,7 @@ impl eframe::App for PlaybackApp {
                 .fill(theme::AppColors::SURFACE)
                 .inner_margin(8.0))
             .show(ctx, |ui| {
+            let mut cookie_clicked = false;
             status_panel::show(
                 ui,
                 &self.status_message,
@@ -1194,8 +2075,14 @@ impl eframe::App for PlaybackApp {
                 self.status_time,
                 self.dmx_connected,
                 &self.plc_status,
-                self.settings.use_rgbw
+                self.settings.use_rgbw,
+                self.cookie_icon.as_ref(),
+                &mut cookie_clicked,
             );
+            
+            if cookie_clicked {
+                self.show_random_fortune();
+            }
         });
         
         // Left sidebar navigation with dark background
@@ -1205,9 +2092,24 @@ impl eframe::App for PlaybackApp {
                 .fill(theme::AppColors::BACKGROUND_LIGHT)
                 .inner_margin(0.0))
             .show(ctx, |ui| {
-                if let Some(new_view) = self.sidebar.show(ctx, ui) {
+                // Pass playing state, but only disable if truly playing (not paused)
+                let is_actively_playing = self.is_playing && !self.is_paused;
+                if let Some(new_view) = self.sidebar.show(ctx, ui, is_actively_playing) {
                     // View changed
                     info!("Switched to view: {:?}", new_view);
+                    
+                    // If switching to Operator view, re-initialize as if app just loaded
+                    if new_view == sidebar::AppView::Operator {
+                        // Reset lighting system when returning to operator screen
+                        self.reset_lighting_system();
+                        
+                        // Reset operator panel to fresh state
+                        self.operator_panel = crate::gui::operator_panel::OperatorPanel::new();
+                        self.operator_panel.load_pre_show_playlist(&self.settings.playlist_folder);
+                        
+                        // Load the first Pre-Show song without blocking
+                        self.load_first_pre_show_song();
+                    }
                 }
             });
         
@@ -1242,11 +2144,17 @@ impl eframe::App for PlaybackApp {
                 sidebar::AppView::SettingsLightGroups => {
                     self.light_group_panel.show(ctx, ui);
                 }
+                sidebar::AppView::SettingsLightsLayout => {
+                    self.lights_layout_panel.show(ctx, ui);
+                }
                 sidebar::AppView::SettingsLegacyColor => {
                     self.legacy_color_panel.show(ctx, ui);
                 }
                 sidebar::AppView::SettingsStartTime => {
                     self.start_time_panel.show(ctx, ui);
+                }
+                sidebar::AppView::SettingsProcedures => {
+                    self.procedures_panel.show(ctx, ui);
                 }
                 sidebar::AppView::SettingsApp => {
                     self.show_settings_view(ctx, ui);
@@ -1258,13 +2166,13 @@ impl eframe::App for PlaybackApp {
         if self.show_about {
             let should_close = std::cell::Cell::new(false);
             
-            egui::Window::new("About GHMF Playback")
+            egui::Window::new("About Fountain Director")
                 .open(&mut self.show_about)
                 .resizable(false)
                 .collapsible(false)
                 .show(ctx, |ui| {
                     ui.vertical_centered(|ui| {
-                        ui.heading("GHMF Playback 2.0");
+                        ui.heading("Fountain Director v1.0");
                         ui.add_space(10.0);
                         ui.label("Cross-platform fountain playback system");
                         ui.label("with synchronized audio and DMX lighting");
@@ -1284,6 +2192,47 @@ impl eframe::App for PlaybackApp {
                 self.show_about = false;
             }
         }
+        
+        // Fortune Cookie Easter Egg Dialog
+        if self.show_fortune_dialog {
+            let should_close = std::cell::Cell::new(false);
+            
+            egui::Window::new("🥠 Fortune Cookie")
+                .open(&mut self.show_fortune_dialog)
+                .resizable(false)
+                .collapsible(false)
+                .anchor(egui::Align2::CENTER_CENTER, egui::vec2(0.0, 0.0))
+                .show(ctx, |ui| {
+                    ui.vertical_centered(|ui| {
+                        // Show cookie image if available
+                        if let Some(icon) = &self.cookie_icon {
+                            let icon_size = egui::vec2(100.0, 100.0);
+                            ui.add(egui::Image::new(icon.as_ref()).fit_to_exact_size(icon_size));
+                            ui.add_space(15.0);
+                        }
+                        
+                        // Show fortune text
+                        ui.label(
+                            egui::RichText::new(&self.current_fortune)
+                                .size(16.0)
+                                .color(theme::AppColors::TEXT_PRIMARY)
+                        );
+                        ui.add_space(20.0);
+                        
+                        // Close button
+                        if ui.button("Close").clicked() {
+                            should_close.set(true);
+                        }
+                    });
+                });
+            
+            if should_close.get() {
+                self.show_fortune_dialog = false;
+            }
+        }
+        
+        // Show toast notifications on top of everything
+        self.toasts.show(ctx);
         
         // Request repaint for smooth animations
         ctx.request_repaint_after(Duration::from_millis(16)); // ~60fps

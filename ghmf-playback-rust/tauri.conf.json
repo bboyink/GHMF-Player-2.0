@@ -1,0 +1,77 @@
+{
+  "build": {
+    "beforeDevCommand": "",
+    "beforeBuildCommand": "",
+    "devPath": "../ui",
+    "distDir": "../ui"
+  },
+  "package": {
+    "productName": "Fountain Director",
+    "version": "1.0.0"
+  },
+  "tauri": {
+    "allowlist": {
+      "all": true,
+      "fs": {
+        "all": true,
+        "scope": ["$RESOURCE/**", "$HOME/**"]
+      },
+      "dialog": {
+        "all": true
+      },
+      "shell": {
+        "all": false
+      }
+    },
+    "bundle": {
+      "active": true,
+      "category": "Entertainment",
+      "copyright": "City of Grand Haven",
+      "deb": {
+        "depends": []
+      },
+      "externalBin": [],
+      "icon": [
+        "icons/32x32.png",
+        "icons/128x128.png",
+        "icons/128x128@2x.png",
+        "icons/icon.icns",
+        "icons/icon.ico"
+      ],
+      "identifier": "com.grandhaven.playback",
+      "longDescription": "Cross-platform fountain playback system with synchronized audio and DMX lighting",
+      "macOS": {
+        "entitlements": null,
+        "exceptionDomain": "",
+        "frameworks": [],
+        "providerShortName": null,
+        "signingIdentity": null
+      },
+      "resources": ["../Config", "../Music"],
+      "shortDescription": "Fountain Playback System",
+      "targets": "all",
+      "windows": {
+        "certificateThumbprint": null,
+        "digestAlgorithm": "sha256",
+        "timestampUrl": ""
+      }
+    },
+    "security": {
+      "csp": null
+    },
+    "updater": {
+      "active": false
+    },
+    "windows": [
+      {
+        "fullscreen": false,
+        "height": 975,
+        "resizable": true,
+        "title": "Fountain Director v1.0",
+        "width": 1290,
+        "minHeight": 600,
+        "minWidth": 800
+      }
+    ]
+  }
+}

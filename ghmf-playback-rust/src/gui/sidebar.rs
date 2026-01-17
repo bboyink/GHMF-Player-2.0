@@ -10,8 +10,10 @@ pub enum AppView {
     Settings,
     SettingsDmxMap,
     SettingsLightGroups,
+    SettingsLightsLayout,
     SettingsLegacyColor,
     SettingsStartTime,
+    SettingsProcedures,
     SettingsApp,
 }
 
@@ -24,8 +26,10 @@ impl AppView {
             AppView::Settings => "⚙",    // Settings gear icon
             AppView::SettingsDmxMap => "◉",      // DMX grid icon
             AppView::SettingsLightGroups => "💡", // Light bulb icon
+            AppView::SettingsLightsLayout => "▦", // Grid layout icon
             AppView::SettingsLegacyColor => "🎨", // Palette icon
             AppView::SettingsStartTime => "🕐",   // Clock icon
+            AppView::SettingsProcedures => "📋",   // Checklist icon
             AppView::SettingsApp => "⚙",    // Settings gear icon
         }
     }
@@ -38,8 +42,10 @@ impl AppView {
             AppView::Settings => "Settings",
             AppView::SettingsDmxMap => "DMX Map",
             AppView::SettingsLightGroups => "Light Groups",
+            AppView::SettingsLightsLayout => "Lights Layout",
             AppView::SettingsLegacyColor => "Legacy Color",
             AppView::SettingsStartTime => "Start Time",
+            AppView::SettingsProcedures => "Procedures",
             AppView::SettingsApp => "Application",
         }
     }
@@ -52,8 +58,10 @@ impl AppView {
             AppView::Settings => "Settings Menu",
             AppView::SettingsDmxMap => "DMX Mapper - Assign Fixtures to DMX Channels",
             AppView::SettingsLightGroups => "Light Group Mapping - Create FWC Light Groups",
+            AppView::SettingsLightsLayout => "Lights Layout - Visual Layout for Operator Screen",
             AppView::SettingsLegacyColor => "Legacy Color Mapping - Map FWC Values to RGB Colors",
             AppView::SettingsStartTime => "Start Time Configuration - Set Show Date and Time",
+            AppView::SettingsProcedures => "Procedures - Configure Pre-Show Reminders",
             AppView::SettingsApp => "Application Settings",
         }
     }
@@ -65,11 +73,13 @@ pub struct Sidebar {
     pub settings_expanded: bool,
     logo_texture: Option<Arc<TextureHandle>>,
     light_groups_icon: Option<Arc<TextureHandle>>,
+    lights_layout_icon: Option<Arc<TextureHandle>>,
     app_settings_icon: Option<Arc<TextureHandle>>,
     dmx_map_icon: Option<Arc<TextureHandle>>,
     sort_down_icon: Option<Arc<TextureHandle>>,
     palette_icon: Option<Arc<TextureHandle>>,
     clock_icon: Option<Arc<TextureHandle>>,
+    checklist_icon: Option<Arc<TextureHandle>>,
 }
 
 impl Default for Sidebar {
@@ -80,11 +90,13 @@ impl Default for Sidebar {
             settings_expanded: false,
             logo_texture: None,
             light_groups_icon: None,
+            lights_layout_icon: None,
             app_settings_icon: None,
             dmx_map_icon: None,
             sort_down_icon: None,
             palette_icon: None,
             clock_icon: None,
+            checklist_icon: None,
         }
     }
 }
@@ -230,9 +242,47 @@ impl Sidebar {
                 self.clock_icon = Some(Arc::new(texture));
             }
         }
+
+        // Load Grid icon for Lights Layout
+        if self.lights_layout_icon.is_none() {
+            let icon_bytes = include_bytes!("../../assets/grid.png");
+            if let Ok(image) = image::load_from_memory(icon_bytes) {
+                let size = [image.width() as _, image.height() as _];
+                let image_buffer = image.to_rgba8();
+                let pixels = image_buffer.as_flat_samples();
+                let color_image = ColorImage::from_rgba_unmultiplied(size, pixels.as_slice());
+                
+                let texture = ctx.load_texture(
+                    "lights_layout_icon",
+                    color_image,
+                    Default::default()
+                );
+                
+                self.lights_layout_icon = Some(Arc::new(texture));
+            }
+        }
+
+        // Load Checklist icon
+        if self.checklist_icon.is_none() {
+            let icon_bytes = include_bytes!("../../assets/check_list.png");
+            if let Ok(image) = image::load_from_memory(icon_bytes) {
+                let size = [image.width() as _, image.height() as _];
+                let image_buffer = image.to_rgba8();
+                let pixels = image_buffer.as_flat_samples();
+                let color_image = ColorImage::from_rgba_unmultiplied(size, pixels.as_slice());
+                
+                let texture = ctx.load_texture(
+                    "checklist_icon",
+                    color_image,
+                    Default::default()
+                );
+                
+                self.checklist_icon = Some(Arc::new(texture));
+            }
+        }
     }
 
-    pub fn show(&mut self, ctx: &Context, ui: &mut Ui) -> Option<AppView> {
+    pub fn show(&mut self, ctx: &Context, ui: &mut Ui, is_playing: bool) -> Option<AppView> {
         // Load logo texture if not already loaded
         self.load_logo(ctx);
         self.load_icons(ctx);
@@ -262,16 +312,17 @@ impl Sidebar {
                 } else {
                     // Fallback text
                     ui.label(
-                        egui::RichText::new("GHMF Playback")
+                        egui::RichText::new("Fountain Director")
                             .size(18.0)
                             .strong()
                             .color(AppColors::CYAN)
                     );
                 }
                 ui.label(
-                    egui::RichText::new("v2.0")
-                        .size(11.0)
-                        .color(AppColors::TEXT_SECONDARY)
+                    egui::RichText::new("v1.0")
+                        .size(16.0)
+                        .strong()
+                        .color(AppColors::CYAN)
                 );
             });
             
@@ -290,13 +341,13 @@ impl Sidebar {
             ];
             
             for view in views {
-                if self.nav_button(ui, view) {
+                if self.nav_button(ui, view, is_playing) {
                     clicked_view = Some(view);
                 }
             }
             
             // Settings menu with submenus
-            if self.settings_menu_button(ui) {
+            if self.settings_menu_button(ui, is_playing) {
                 self.settings_expanded = !self.settings_expanded;
             }
             
@@ -305,13 +356,15 @@ impl Sidebar {
                 let subviews = [
                     AppView::SettingsDmxMap,
                     AppView::SettingsLightGroups,
+                    AppView::SettingsLightsLayout,
                     AppView::SettingsLegacyColor,
                     AppView::SettingsStartTime,
+                    AppView::SettingsProcedures,
                     AppView::SettingsApp,
                 ];
                 
                 for view in subviews {
-                    if self.submenu_button(ui, view) {
+                    if self.submenu_button(ui, view, is_playing) {
                         clicked_view = Some(view);
                     }
                 }
@@ -323,8 +376,11 @@ impl Sidebar {
         clicked_view
     }
     
-    fn nav_button(&mut self, ui: &mut Ui, view: AppView) -> bool {
+    fn nav_button(&mut self, ui: &mut Ui, view: AppView, is_playing: bool) -> bool {
         let is_selected = self.selected_view == view;
+        
+        // Disable all buttons except Operator when playing
+        let is_disabled = is_playing && view != AppView::Operator;
         
         let button_color = if is_selected {
             Color32::from_rgba_unmultiplied(0, 198, 255, 40) // Cyan with alpha
@@ -332,13 +388,17 @@ impl Sidebar {
             Color32::TRANSPARENT
         };
         
-        let hover_color = if is_selected {
+        let hover_color = if is_disabled {
+            button_color // No hover effect when disabled
+        } else if is_selected {
             Color32::from_rgba_unmultiplied(0, 198, 255, 60)
         } else {
             AppColors::SURFACE
         };
         
-        let text_color = if is_selected {
+        let text_color = if is_disabled {
+            Color32::from_rgba_unmultiplied(100, 100, 100, 120) // Dimmed when disabled
+        } else if is_selected {
             Color32::WHITE
         } else {
             AppColors::TEXT_SECONDARY
@@ -350,7 +410,7 @@ impl Sidebar {
         );
         
         // Draw background with rounded corners
-        if response.hovered() {
+        if !is_disabled && response.hovered() {
             ui.painter().rect_filled(
                 rect.shrink(4.0),
                 8.0,
@@ -365,7 +425,7 @@ impl Sidebar {
         }
         
         // Draw selection indicator (left border) as a rounded rect
-        if is_selected {
+        if is_selected && !is_disabled {
             let indicator_rect = Rect::from_min_max(
                 Pos2::new(rect.min.x + 6.0, rect.min.y + 10.0),
                 Pos2::new(rect.min.x + 10.0, rect.max.y - 10.0)
@@ -415,22 +475,31 @@ impl Sidebar {
         }
     }
     
-    fn settings_menu_button(&mut self, ui: &mut Ui) -> bool {
+    fn settings_menu_button(&mut self, ui: &mut Ui, is_playing: bool) -> bool {
         // Don't highlight Settings button when a submenu is selected
         let is_selected = false;
+        let is_disabled = is_playing;
         
         let button_color = Color32::TRANSPARENT;
         
-        let hover_color = AppColors::SURFACE;
+        let hover_color = if is_disabled {
+            button_color
+        } else {
+            AppColors::SURFACE
+        };
         
-        let text_color = AppColors::TEXT_SECONDARY;
+        let text_color = if is_disabled {
+            Color32::from_rgba_unmultiplied(100, 100, 100, 120)
+        } else {
+            AppColors::TEXT_SECONDARY
+        };
         
         let (rect, response) = ui.allocate_exact_size(
             Vec2::new(ui.available_width(), 48.0),
             egui::Sense::click()
         );
         
-        if response.hovered() {
+        if !is_disabled && response.hovered() {
             ui.painter().rect_filled(
                 rect.shrink(4.0),
                 8.0,
@@ -493,10 +562,11 @@ impl Sidebar {
             );
         }
         
-        response.on_hover_text("Settings Menu").clicked()
+        !is_disabled && response.on_hover_text("Settings Menu").clicked()
     }
     
-    fn submenu_button(&mut self, ui: &mut Ui, view: AppView) -> bool {
+    fn submenu_button(&mut self, ui: &mut Ui, view: AppView, is_playing: bool) -> bool {
+        let is_disabled = is_playing;
         let is_selected = self.selected_view == view;
         
         let button_color = if is_selected {
@@ -511,7 +581,9 @@ impl Sidebar {
             AppColors::SURFACE
         };
         
-        let text_color = if is_selected {
+        let text_color = if is_disabled {
+            Color32::from_rgba_unmultiplied(100, 100, 100, 120)
+        } else if is_selected {
             Color32::WHITE
         } else {
             AppColors::TEXT_SECONDARY
@@ -522,7 +594,7 @@ impl Sidebar {
             egui::Sense::click()
         );
         
-        if response.hovered() {
+        if !is_disabled && response.hovered() {
             ui.painter().rect_filled(
                 rect.shrink2(Vec2::new(8.0, 2.0)),
                 6.0,
@@ -565,6 +637,28 @@ impl Sidebar {
             }
             AppView::SettingsLightGroups => {
                 if let Some(icon) = &self.light_groups_icon {
+                    let icon_rect = Rect::from_center_size(
+                        icon_pos,
+                        Vec2::new(icon_size, icon_size)
+                    );
+                    ui.painter().image(
+                        icon.id(),
+                        icon_rect,
+                        Rect::from_min_max(Pos2::ZERO, Pos2::new(1.0, 1.0)),
+                        Color32::WHITE
+                    );
+                } else {
+                    ui.painter().text(
+                        icon_pos,
+                        egui::Align2::LEFT_CENTER,
+                        view.icon(),
+                        FontId::new(icon_size, FontFamily::Proportional),
+                        text_color
+                    );
+                }
+            }
+            AppView::SettingsLightsLayout => {
+                if let Some(icon) = &self.lights_layout_icon {
                     let icon_rect = Rect::from_center_size(
                         icon_pos,
                         Vec2::new(icon_size, icon_size)
@@ -651,6 +745,28 @@ impl Sidebar {
                     );
                 }
             }
+            AppView::SettingsProcedures => {
+                if let Some(icon) = &self.checklist_icon {
+                    let icon_rect = Rect::from_center_size(
+                        icon_pos,
+                        Vec2::new(icon_size, icon_size)
+                    );
+                    ui.painter().image(
+                        icon.id(),
+                        icon_rect,
+                        Rect::from_min_max(Pos2::ZERO, Pos2::new(1.0, 1.0)),
+                        Color32::WHITE
+                    );
+                } else {
+                    ui.painter().text(
+                        icon_pos,
+                        egui::Align2::LEFT_CENTER,
+                        view.icon(),
+                        FontId::new(icon_size, FontFamily::Proportional),
+                        text_color
+                    );
+                }
+            }
             _ => {
                 ui.painter().text(
                     icon_pos,
@@ -674,7 +790,7 @@ impl Sidebar {
         
         let tooltip_response = response.on_hover_text(view.tooltip());
         
-        if tooltip_response.clicked() {
+        if !is_disabled && tooltip_response.clicked() {
             self.selected_view = view;
             true
         } else {

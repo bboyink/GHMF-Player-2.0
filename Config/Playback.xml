@@ -1,4 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!--
+  LEGACY CONFIGURATION FILE - FOR REFERENCE ONLY
+  This XML file was used by the old C# application.
+  The Rust application uses JSON configuration files instead:
+    - legacy_colors.json (replaces ColorMap.csv)
+    - light_groups.json (replaces FCWMap.CSV)
+    - DMXMap.csv (still used for fixture definitions)
+-->
 <SettingsHolder xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
   <AudioEndpointID>{0.0.0.00000000}.{0be37517-f8cf-4e02-9b7d-c0fde026ff30}</AudioEndpointID>
   <DefaultColorMap>C:\GHMF Player\Config\ColorMap.csv</DefaultColorMap>

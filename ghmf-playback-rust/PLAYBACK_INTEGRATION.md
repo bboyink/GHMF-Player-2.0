@@ -57,17 +57,17 @@ GUI Update (60 FPS)
       → get_commands_at_time(current_ms)
       → For each command:
         → FixtureManager.execute_fcw_command()
-          → Look up FCW in FCWMap.csv
-          → Look up color in ColorMap.csv
+          → Look up FCW in light_groups.json
+          → Look up color in legacy_colors.json
           → Set affected fixtures
         → Apply to DMX Universe
         → Send to Enttec controller
 ```
 
 **Files Integrated:**
-- ColorMap.csv: 32 colors
+- legacy_colors.json: 32 colors
 - DMXMap.csv: 56 fixtures
-- FCWMap.csv: 231 FCW mappings
+- light_groups.json: 60+ light group mappings
 - .ctl file: ~1000+ commands per song
 
 ## 🎬 Next Steps
